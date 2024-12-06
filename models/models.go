@@ -27,11 +27,11 @@ type FNumbers struct {
 // Data is the top-level tag in the input XML file
 type Data struct {
 	XMLName xml.Name `xml:"Data"`
-	Records []Record `json:"Records" xml:"Record"`
+	Records []Record `xml:"Record"` // Correctly maps repeated <Record> elements
 }
 
-// Record is a single row of a database record in the input XML file
+// Record represents a single record in the XML
 type Record struct {
 	XMLName     xml.Name    `xml:"Record"`
-	MistAMSData `json:",inline" xml:",inline"`
+	MistAMSData `xml:",inline"` // Inline fields from MistAMSData into the <Record> element
 }

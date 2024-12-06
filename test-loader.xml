@@ -41,11 +41,11 @@
         <user>AliceJohnson</user>
         <dateCreated>1698413000</dateCreated>
         <dateSubmitted>1698499400</dateSubmitted>
-        <assetName></assetName>
+        <assetName>.</assetName>
         <location>HQ</location>
         <status>Rejected</status>
         <jsonHash>hash789</jsonHash>
-        <localId></localId>
+        <localId>.</localId>
         <fileName>fileC.txt</fileName>
         <fnumbers>
             <fNumber>FN005</fNumber>
@@ -83,7 +83,7 @@
         <location>HQ</location>
         <status>Pending</status>
         <jsonHash>hash202</jsonHash>
-        <localId></localId>
+        <localId>.</localId>
         <fileName>fileE.txt</fileName>
         <fnumbers>
             <fNumber>FN009</fNumber>
@@ -121,7 +121,7 @@
         <location>HQ</location>
         <status>Rejected</status>
         <jsonHash>hash404</jsonHash>
-        <localId></localId>
+        <localId>.</localId>
         <fileName>fileG.txt</fileName>
         <fnumbers>
             <fNumber>FN013</fNumber>
@@ -136,11 +136,11 @@
         <user>MichaelBrown</user>
         <dateCreated>1698413500</dateCreated>
         <dateSubmitted>1698499900</dateSubmitted>
-        <assetName></assetName>
+        <assetName>.</assetName>
         <location>Branch4</location>
         <status>Pending</status>
         <jsonHash>hash505</jsonHash>
-        <localId></localId>
+        <localId>.</localId>
         <fileName>fileH.txt</fileName>
         <fnumbers>
             <fNumber>FN015</fNumber>

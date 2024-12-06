@@ -2,6 +2,7 @@ package mapreduce
 
 import (
 	"database/sql"
+	"fmt"
 	"sync"
 )
 
@@ -56,6 +57,7 @@ func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db
 
 	// Split records into batches and feed them to taskChan
 	go func() {
+		fmt.Printf("Length of Records: %d | Worker Count: %d\n", len(records), workerCount)
 		batchSize := (len(records) + workerCount - 1) / workerCount
 		for i := 0; i < len(records); i += batchSize {
 			end := i + batchSize

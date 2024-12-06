@@ -14,7 +14,7 @@ import (
 
 func main() {
 	// Example struct to hold the data
-	var result []models.Data
+	var result models.Data
 	var records []interface{}
 
 	// Specify the input file (JSON or XML)
@@ -26,14 +26,13 @@ func main() {
 		return
 	}
 
+	fmt.Printf("Unmarshalled Result: %v", result)
+	fmt.Println("Processing and Mapping Records")
 	// Process and map records
-	for _, record := range result {
-		for _, r := range record.Records {
-			// Append each Record as an interface{}
-			records = append(records, r)
-			// Access individual fields
-			fmt.Printf("User: %v| Hash: %v", r.User, r.JsonHash)
-		}
+	for _, record := range result.Records {
+		records = append(records, record)
+		// Access individual fields
+		fmt.Printf("User: %v| Hash: %v", record.User, record.JsonHash)
 	}
 
 	// Database connection
@@ -44,15 +43,13 @@ func main() {
 	}
 	defer db.Close()
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(25)
-
+	db.SetMaxOpenConns(pkg.WorkerCount)
 	// Run MapReduce
 	err = mapreduce.MapReduce(records, dbtransposer.InsertRecords, dbtransposer.ProcessMapResults, db, pkg.WorkerCount)
 	if err != nil {
 		log.Fatalf("MapReduce failed: %v", err)
 	} else {
-		log.Println("MapReduce completed successfully")
+		log.Printf("MapReduce completed successfully, inserted %d records", len(records))
 	}
 
 }

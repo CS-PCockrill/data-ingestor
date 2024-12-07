@@ -18,7 +18,7 @@ func main() {
 	var records []interface{}
 
 	// Specify the input file (JSON or XML)
-	inputFile := "test-loader.xml" // Change to "test-loader.json" to test JSON input
+	inputFile := "test-loader.json" // Change to "test-loader.json" to test JSON input
 
 	// Unmarshal the file
 	if err := fileloader.UnmarshalFile(inputFile, &result); err != nil {

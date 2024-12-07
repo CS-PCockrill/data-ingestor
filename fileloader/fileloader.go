@@ -1,6 +1,7 @@
 package fileloader
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -20,7 +21,7 @@ func detectFileType(filePath string) (string, error) {
 
 // UnmarshalFile unmarshals the file content into the provided struct based on file type.
 func UnmarshalFile(filePath string, v interface{}) error {
-	_, err := detectFileType(filePath)
+	fileType, err := detectFileType(filePath)
 	if err != nil {
 		return err
 	}
@@ -33,12 +34,27 @@ func UnmarshalFile(filePath string, v interface{}) error {
 		return err
 	}
 
-	// Parse the XML into the Data struct
-	decoder := xml.NewDecoder(file)
-	err = decoder.Decode(v)
-	if err != nil {
-		fmt.Printf("Error decoding XML: %v\n", err)
-		return err
+	switch fileType {
+	case "json":
+		// Parse the XML into the Data struct
+		decoder := json.NewDecoder(file)
+		err = decoder.Decode(v)
+		if err != nil {
+			fmt.Printf("Error decoding XML: %v\n", err)
+			return err
+		}
+
+	case "xml":
+		// Parse the XML into the Data struct
+		decoder := xml.NewDecoder(file)
+		err = decoder.Decode(v)
+		if err != nil {
+			fmt.Printf("Error decoding XML: %v\n", err)
+			return err
+		}
+
+	default:
+		return errors.New("unsupported file type")
 	}
 
 	return nil

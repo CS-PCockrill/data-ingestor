@@ -27,7 +27,7 @@ type FNumbers struct {
 // Data is the top-level tag in the input XML file
 type Data struct {
 	XMLName xml.Name `xml:"Data"`
-	Records []Record `xml:"Record"` // Correctly maps repeated <Record> elements
+	Records []Record `json:"Records" xml:"Record"` // Correctly maps repeated <Record> elements
 }
 
 // Record represents a single record in the XML

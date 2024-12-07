@@ -8,7 +8,6 @@ import (
 	"log"
 )
 
-// InsertRecords inserts a batch of MistAMSData records into the database.
 func InsertRecords(tx *sql.Tx, batch []interface{}) error {
 	// Prepare the SQL statement with positional parameters
 	query := `
@@ -25,7 +24,7 @@ func InsertRecords(tx *sql.Tx, batch []interface{}) error {
 	}
 	defer stmt.Close()
 
-	// Iterate over the batch and execute the query for each record
+	// Iterate over the batch and process each record
 	for _, obj := range batch {
 		// Assert the type of the item
 		record, ok := obj.(models.Record)
@@ -33,27 +32,52 @@ func InsertRecords(tx *sql.Tx, batch []interface{}) error {
 			return fmt.Errorf("invalid record type: %T", obj)
 		}
 
-		// Execute the query with positional parameters
-		_, err := stmt.Exec(
-			record.User,                // $1
-			record.DateCreated,         // $2
-			record.DateSubmitted,       // $3
-			record.AssetName,           // $4 (nullable)
-			record.Location,            // $5
-			record.Status,              // $6
-			record.JsonHash,            // $7
-			record.LocalID,             // $8 (nullable)
-			record.FileName,            // $9
-			record.FNumber,             // $10
-			record.ScanTime,            // $11
-		)
-		if err != nil {
-			log.Printf("Failed to insert record %+v: %v", record, err)
-			return fmt.Errorf("failed to insert record: %w", err)
+		// If FNumbers exists, insert one row per FNumber
+		if len(record.FNumbers) > 0 {
+			for _, fNumberEntry := range record.FNumbers {
+				_, err := stmt.Exec(
+					record.User,                // $1
+					record.DateCreated,         // $2
+					record.DateSubmitted,       // $3
+					record.AssetName,           // $4 (nullable)
+					record.Location,            // $5
+					record.Status,              // $6
+					record.JsonHash,            // $7
+					record.LocalID,             // $8 (nullable)
+					record.FileName,            // $9
+					fNumberEntry.FNumber,       // $10
+					fNumberEntry.ScanTime,      // $11
+				)
+				if err != nil {
+					log.Printf("Failed to insert record with FNumber %+v: %v", fNumberEntry, err)
+					return fmt.Errorf("failed to insert record: %w", err)
+				}
+			}
+		} else {
+			// If no FNumbers, insert a single row with empty FNumber and ScanTime
+			_, err := stmt.Exec(
+				record.User,          // $1
+				record.DateCreated,   // $2
+				record.DateSubmitted, // $3
+				record.AssetName,     // $4 (nullable)
+				record.Location,      // $5
+				record.Status,        // $6
+				record.JsonHash,      // $7
+				record.LocalID,       // $8 (nullable)
+				record.FileName,      // $9
+				"",                   // $10 (empty FNumber)
+				"",                   // $11 (empty ScanTime)
+			)
+			if err != nil {
+				log.Printf("Failed to insert record without FNumber: %+v: %v", record, err)
+				return fmt.Errorf("failed to insert record: %w", err)
+			}
 		}
 	}
+
 	return nil
 }
+
 
 //// InsertRecords inserts a batch of MistAMSData records into the database.
 //func InsertRecords(tx *sql.Tx, batch []interface{}) error {

@@ -15,7 +15,7 @@ type MistAMSData struct {
 	FileName      string      `json:"fileName" xml:"fileName" db:"filename"`
 	FNumber  string `json:"fNumber" xml:"fNumber" db:"fnumber"`
 	ScanTime string `json:"scanTime" xml:"scanTime" db:"scan_time"`
-	//FNumbers      []FNumbers  `json:"fnumbers" xml:"fnumbers"` // Not directly mapped to the database
+	FNumbers      []FNumbers  `json:"fnumbers" xml:"fnumbers"` // Not directly mapped to the database
 }
 
 // FNumbers represents the fNumber and scanTime fields

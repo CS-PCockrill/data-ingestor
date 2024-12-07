@@ -8,7 +8,7 @@ import (
 	"data-ingestor/pkg"
 	"database/sql"
 	"fmt"
-	_ "github.com/godror/godror"
+	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"log"
 )
 
@@ -35,13 +35,22 @@ func main() {
 		fmt.Printf("User: %v| Hash: %v", record.User, record.JsonHash)
 	}
 
-	// Database connection
-	dsn := fmt.Sprintf("%s/%s@%s:%s/%s", pkg.DBUser, pkg.DBPassword, pkg.DBHostname, pkg.DBPort, pkg.DBName)
-	db, err := sql.Open("godror", dsn)
+	// PostgreSQL connection string
+	dsn := "postgres://root:password@localhost:5432/testdb"
+
+	// Connect to the database
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		log.Fatalf("Failed to connect to the database: %v", err)
+		log.Fatalf("Failed to open a connection to the database: %v", err)
 	}
 	defer db.Close()
+
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to connect to the database: %v", err)
+	}
+
+	fmt.Println("Connected to PostgreSQL database successfully!")
 
 	db.SetMaxOpenConns(pkg.WorkerCount)
 	// Run MapReduce

@@ -42,13 +42,5 @@ func UnmarshalFile(filePath string, v interface{}) error {
 	}
 
 	return nil
-	//switch fileType {
-	//case "json":
-	//	return json.Unmarshal(data, v)
-	//case "xml":
-	//	return xml.Unmarshal(data, v)
-	//default:
-	//	return errors.New("unsupported file type")
-	//}
 }
 

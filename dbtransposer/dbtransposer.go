@@ -28,7 +28,7 @@ func InsertRecords(tx *sql.Tx, batch []interface{}) error {
 	// Iterate over the batch and execute the query for each record
 	for _, obj := range batch {
 		// Assert the type of the item
-		record, ok := obj.(models.MistAMSData)
+		record, ok := obj.(models.Record)
 		if !ok {
 			return fmt.Errorf("invalid record type: %T", obj)
 		}

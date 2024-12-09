@@ -246,12 +246,13 @@ func extractSQLData(record interface{}) (columns []string, placeholders []string
 	typ := val.Type()
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
+		fmt.Printf("Value in Extract - %v", field)
+
 		tag := field.Tag.Get("db")
 		if tag == "" || tag == "-" {
 			continue // Skip fields without "db" tags or explicitly ignored
 		}
 
-		fmt.Printf("Value in Extract - %v", field)
 
 		columns = append(columns, tag)
 		placeholders = append(placeholders, "?")

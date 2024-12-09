@@ -242,9 +242,6 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 		value := v.Field(i)
 
 		dbTag := field.Tag.Get("db")
-		if dbTag == "-" || dbTag == "" {
-			continue // Skip fields without a valid "db" tag
-		}
 
 		if field.Anonymous {
 			// Handle embedded anonymous structs
@@ -277,6 +274,9 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 				}
 			}
 		} else {
+			if dbTag == "-" || dbTag == "" {
+				continue // Skip fields without a valid "db" tag
+			}
 			// Normal fields
 			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
 			baseRow = append(baseRow, value.Interface())

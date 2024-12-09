@@ -248,7 +248,7 @@ func ExtractSQLData(record interface{}) (columns []string, placeholders []string
 			}
 		} else {
 			// Add normal fields
-			columns = append(columns, dbTag)
+			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
 			placeholders = append(placeholders, fmt.Sprintf("$%d", placeholderIndex))
 			placeholderIndex++
 			values = append(values, value.Interface())

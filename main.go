@@ -79,7 +79,9 @@ func main() {
 			}
 			return nil
 		},
-		dbTransposer.InsertRecords,
+		func(tx *sql.Tx, tableName string, recordStream <-chan interface{}) error {
+			return dbTransposer.InsertRecords(tx, tableName, recordStream)
+		},
 		dbTransposer.ProcessMapResults,
 		app.DB,
 		tableName,

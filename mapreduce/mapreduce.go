@@ -21,7 +21,7 @@ type Task struct {
 }
 
 // MapFunc defines the function signature for the map phase.
-type MapFunc func(tx *sql.Tx, tableName string, batch []interface{}) error
+type MapFunc func(tx *sql.Tx, tableName string, batch <-chan interface{}) error
 
 // ReduceFunc defines the function signature for the reduce phase.
 type ReduceFunc func(results []MapResult) error

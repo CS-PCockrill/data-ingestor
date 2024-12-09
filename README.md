@@ -2,14 +2,14 @@
 
 XML-JSON Loader is a Go-based application designed to parse XML and JSON files containing structured data, and efficiently load the records into a SQL database using Map-Reduce for batch processing. The system supports PostgreSQL and includes robust error handling for data integrity and transaction safety.
 
-##**Features**
+## Features
 - Supports XML and JSON file formats. 
 - Dynamically parses data structures with nested and flattened records.
 - Uses Map-Reduce to distribute tasks across workers for scalable performance.
 - Ensures data integrity with transaction-based inserts.
 - Compatible with PostgreSQL for modern database management. 
 
-##**Table of Contents**
+## Table of Contents
 
 - [Installation](#installation) 
 - [Usage](#usage)
@@ -18,29 +18,33 @@ XML-JSON Loader is a Go-based application designed to parse XML and JSON files c
   - [Dependency Management](#dependency-management)
 
 
-##**Installation**
+## Installation
 
 Clone the repository:
 ```shell
-git clone https://github.com/yourusername/xml-json-loader.git
-cd xml-json-loader
+git clone https://github.com/CS-PCockrill/data-ingestor.git
+cd data-ingestor
 ```
 Install dependencies:
 ```shell
 go mod tidy
-go mod vendor
+go mod vendor # Must be connected to the internet for this
 ```
 Build the application:
 ```shell
+# To build it in a public network
 go build -o loader
+
+# To build it in a disconnected environment (assuming Vendor was generated previously)
+go build -mod=vendor -o loader
 ```
 
-##**Usage**
+## Usage
 
 Command-Line Options
--file: Specify the path to the input file (XML or JSON).
-Example Command
-To load a JSON file:
+- -file: Specify the path to the input file (XML or JSON).
+
+Example Command to load a JSON file:
 ```shell
 ./loader -file path/to/test-loader.json
 ````
@@ -50,11 +54,15 @@ To load an XML file:
 ./loader -file path/to/test-loader.xml
 ````
 Sample Output
-Processing file: test-loader.json
-Parsed 10 records successfully.
-All records inserted into the database.
+```shell
+Length of Records: 10 | Worker Count: 2
+2024/12/07 00:38:46 Transaction for batch 1 committed successfully
+2024/12/07 00:38:46 Transaction for batch 0 committed successfully
+2024/12/07 00:38:46 All transactions committed successfully
+2024/12/07 00:38:46 MapReduce completed successfully, inserted 10 records
+```
 
-##**Configuration**
+## Configuration
 
 ### Run a Postgres Container
 ```shell

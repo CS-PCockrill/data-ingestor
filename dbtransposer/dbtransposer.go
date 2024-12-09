@@ -291,6 +291,7 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 		}
 	}
 
+	fmt.Printf("Columns: %v\nRows: %v", columns, rows)
 	// If no slices were processed, use the base row as a single entry
 	if len(rows) == 0 {
 		rows = [][]interface{}{baseRow}

@@ -13,9 +13,9 @@ type MistAMSData struct {
 	JsonHash      string      `json:"jsonHash" xml:"jsonHash" db:"json_hash"`
 	LocalID       *string     `json:"localId" xml:"localId" db:"local_id"`
 	FileName      string      `json:"fileName" xml:"fileName" db:"filename"`
-	FNumber  string `json:"fNumber" xml:"fNumber" db:"fnumber"`
-	ScanTime string `json:"scanTime" xml:"scanTime" db:"scan_time"`
-	FNumbers      []FNumbers  `json:"fnumbers" xml:"fnumbers" db:""` // Not directly mapped to the database
+	//FNumber  string `json:"fNumber" xml:"fNumber" db:"fnumber"`
+	//ScanTime string `json:"scanTime" xml:"scanTime" db:"scan_time"`
+	FNumbers      []FNumbers  `json:"fnumbers" xml:"fnumbers"` // Not directly mapped to the database
 }
 
 // FNumbers represents the fNumber and scanTime fields

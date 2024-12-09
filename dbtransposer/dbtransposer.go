@@ -41,7 +41,6 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 		// Combine the query with placeholders
 		query += strings.Join(allPlaceholders, ", ")
 
-		fmt.Printf("Query After Join: %v", query)
 		// Execute the query
 		_, err = tx.Exec(query, allValues...)
 		if err != nil {
@@ -51,6 +50,7 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 
 	return nil
 }
+
 
 
 //func InsertRecords(tx *sql.Tx, batch []interface{}) error {
@@ -234,12 +234,39 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 	columns = []string{}
 	rows = [][]interface{}{}
 
-	// Iterate over fields in the struct
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)
 
+		// Handle slices separately
+		if value.Kind() == reflect.Slice {
+			// Iterate over slice elements and process them
+			for j := 0; j < value.Len(); j++ {
+				element := value.Index(j).Interface()
+				elementColumns, elementRows, elementErr := ExtractSQLData(element)
+				if elementErr != nil {
+					return nil, nil, elementErr
+				}
+
+				// Ensure columns are only appended once (from the first element)
+				if len(columns) == 0 {
+					columns = append(columns, elementColumns...)
+				}
+
+				// Combine base values with element values to form rows
+				for _, elementRow := range elementRows {
+					row := append(append([]interface{}{}, baseValues...), elementRow...)
+					rows = append(rows, row)
+				}
+			}
+			continue
+		}
+
+		// Handle normal fields or anonymous structs
 		dbTag := field.Tag.Get("db")
+		if dbTag == "-" || dbTag == "" {
+			continue // Skip fields without a valid "db" tag
+		}
 
 		if field.Anonymous {
 			// Handle embedded anonymous structs
@@ -247,36 +274,22 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 			if nestedErr != nil {
 				return nil, nil, nestedErr
 			}
+
 			columns = append(columns, nestedColumns...)
 			if len(nestedRows) > 0 {
-				baseValues = append(baseValues, nestedRows[0]...) // Add the first row for anonymous fields
-			}
-		} else if value.Kind() == reflect.Slice {
-			// Handle slices: generate rows for each slice element
-			for j := 0; j < value.Len(); j++ {
-				element := value.Index(j).Interface()
-				elementValue := reflect.ValueOf(element)
-
-				// Create a new row with base values and the current slice element
-				row := append(append([]interface{}{}, baseValues...), elementValue.Interface())
-				rows = append(rows, row)
+				baseValues = append(baseValues, nestedRows[0]...)
 			}
 		} else {
-			if dbTag == "-" || dbTag == "" {
-				continue // Skip fields without a valid "db" tag
-			}
-			// Normal fields: add to columns and base values
-			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
+			// Add normal fields
+			columns = append(columns, dbTag)
 			baseValues = append(baseValues, value.Interface())
 		}
 	}
 
-	// If no slices were processed, use the base values as a single row
+	// If no slices were processed, use the base row as a single entry
 	if len(rows) == 0 {
 		rows = [][]interface{}{baseValues}
 	}
 
 	return columns, rows, nil
 }
-
-

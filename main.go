@@ -7,18 +7,25 @@ import (
 	"data-ingestor/models"
 	"data-ingestor/pkg"
 	"database/sql"
+	"flag"
 	"fmt"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"log"
 )
 
 func main() {
-	// Example struct to hold the data
+	// Define a command-line flag for the input file
+	var inputFile string
+	flag.StringVar(&inputFile, "file", "", "Path to the input file (JSON or XML)")
+	flag.Parse()
+
+	// Ensure the input file flag is provided
+	if inputFile == "" {
+		log.Fatalf("Error: You must specify an input file using the -file flag")
+	}
+
 	var result models.Data
 	var records []interface{}
-
-	// Specify the input file (JSON or XML)
-	inputFile := "test-loader.json" // Change to "test-loader.json" to test JSON input
 
 	// Unmarshal the file
 	if err := fileloader.UnmarshalFile(inputFile, &result); err != nil {
@@ -26,13 +33,12 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Unmarshalled Result: %v", result)
 	fmt.Println("Processing and Mapping Records")
 	// Process and map records
 	for _, record := range result.Records {
 		records = append(records, record)
 		// Access individual fields
-		fmt.Printf("User: %v| Hash: %v", record.User, record.JsonHash)
+		fmt.Printf("User: %v | Hash: %v\n", record.User, record.JsonHash)
 	}
 
 	// PostgreSQL connection string
@@ -51,7 +57,6 @@ func main() {
 	}
 
 	fmt.Println("Connected to PostgreSQL database successfully!")
-
 	db.SetMaxOpenConns(pkg.WorkerCount)
 	// Run MapReduce
 	err = mapreduce.MapReduce(records, dbtransposer.InsertRecords, dbtransposer.ProcessMapResults, db, pkg.WorkerCount)

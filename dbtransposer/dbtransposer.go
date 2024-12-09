@@ -30,8 +30,8 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 
 		for _, row := range rows {
 			rowPlaceholders := []string{}
-			fmt.Printf("Row: %v", row)
-			for range row {
+			for i, r := range row {
+				fmt.Printf("Row[%d]: %v\n", i, r)
 				rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
 				placeholderIndex++
 			}

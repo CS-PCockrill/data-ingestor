@@ -231,39 +231,15 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 		return nil, nil, fmt.Errorf("expected a struct but got %s", v.Kind())
 	}
 
-	baseValues := []interface{}{}
+	baseRow := []interface{}{}
 	columns = []string{}
 	rows = [][]interface{}{}
 
+	// Iterate over fields in the struct
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)
 
-		// Handle slices separately
-		if value.Kind() == reflect.Slice {
-			// Iterate over slice elements and process them
-			for j := 0; j < value.Len(); j++ {
-				element := value.Index(j).Interface()
-				elementColumns, elementRows, elementErr := ExtractSQLData(element)
-				if elementErr != nil {
-					return nil, nil, elementErr
-				}
-
-				// Ensure columns are only appended once (from the first element)
-				if len(columns) == 0 {
-					columns = append(columns, elementColumns...)
-				}
-
-				// Combine base values with element values to form rows
-				for _, elementRow := range elementRows {
-					row := append(append([]interface{}{}, baseValues...), elementRow...)
-					rows = append(rows, row)
-				}
-			}
-			continue
-		}
-
-		// Handle normal fields or anonymous structs
 		dbTag := field.Tag.Get("db")
 		if dbTag == "-" || dbTag == "" {
 			continue // Skip fields without a valid "db" tag
@@ -278,19 +254,44 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 
 			columns = append(columns, nestedColumns...)
 			if len(nestedRows) > 0 {
-				baseValues = append(baseValues, nestedRows[0]...)
+				baseRow = append(baseRow, nestedRows[0]...)
+			}
+		} else if value.Kind() == reflect.Slice {
+			// Handle slices: generate rows for each slice element
+			for j := 0; j < value.Len(); j++ {
+				element := value.Index(j).Interface()
+				elementValue := reflect.ValueOf(element)
+
+				// Ensure columns are only appended once from the first slice element
+				if len(rows) == 0 {
+					for k := 0; k < elementValue.NumField(); k++ {
+						sliceField := elementValue.Type().Field(k)
+						sliceDBTag := sliceField.Tag.Get("db")
+						if sliceDBTag != "" && sliceDBTag != "-" {
+							columns = append(columns, sliceDBTag)
+						}
+					}
+				}
+
+				// Generate a row with base fields and slice element fields
+				row := append([]interface{}{}, baseRow...)
+				for k := 0; k < elementValue.NumField(); k++ {
+					row = append(row, elementValue.Field(k).Interface())
+				}
+				rows = append(rows, row)
 			}
 		} else {
-			// Add normal fields
-			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
-			baseValues = append(baseValues, value.Interface())
+			// Add normal fields to base row
+			columns = append(columns, dbTag)
+			baseRow = append(baseRow, value.Interface())
 		}
 	}
 
 	// If no slices were processed, use the base row as a single entry
 	if len(rows) == 0 {
-		rows = [][]interface{}{baseValues}
+		rows = [][]interface{}{baseRow}
 	}
 
 	return columns, rows, nil
 }
+

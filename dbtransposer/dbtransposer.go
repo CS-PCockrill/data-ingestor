@@ -237,13 +237,14 @@ func ExtractSQLData(record interface{}) (columns []string, placeholders []string
 			columns = append(columns, nestedColumns...)
 			placeholders = append(placeholders, nestedPlaceholders...)
 			values = append(values, nestedValues...)
-		} else if value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
+		} else if field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array || value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
 			// Handle slices/arrays by flattening
 			for j := 0; j < value.Len(); j++ {
 				sliceValue := value.Index(j).Interface()
 				columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
 				placeholders = append(placeholders, fmt.Sprintf("$%d", placeholderIndex))
 				placeholderIndex++
+				fmt.Printf("Slice Value: %v", sliceValue)
 				values = append(values, sliceValue)
 			}
 		} else {

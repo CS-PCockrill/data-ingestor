@@ -45,7 +45,7 @@ func worker(taskChan <-chan interface{}, resultChan chan<- MapResult, mapFunc Ma
 // MapReduce orchestrates the Map and Reduce phases.
 func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db *sql.DB, tableName string, workerCount int) error {
 	// Channels for tasks and results
-	taskChan := make(chan []interface{}, workerCount)
+	taskChan := make(chan interface{}, workerCount)
 	resultChan := make(chan MapResult, workerCount)
 	var wg sync.WaitGroup
 

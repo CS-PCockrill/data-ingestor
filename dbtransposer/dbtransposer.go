@@ -278,7 +278,7 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 			}
 		} else {
 			// Normal fields
-			columns = append(columns, dbTag)
+			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
 			baseRow = append(baseRow, value.Interface())
 		}
 	}

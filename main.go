@@ -5,7 +5,6 @@ import (
 	"data-ingestor/fileloader"
 	"data-ingestor/mapreduce"
 	"flag"
-	_ "github.com/godror/godror"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"log"
 )

@@ -15,13 +15,13 @@ type MistAMSData struct {
 	FileName      string      `json:"fileName" xml:"fileName" db:"filename"`
 	FNumber  string `json:"fNumber" xml:"fNumber" db:"fnumber"`
 	ScanTime string `json:"scanTime" xml:"scanTime" db:"scan_time"`
-	FNumbers      []FNumbers  `json:"fnumbers" xml:"fnumbers"` // Not directly mapped to the database
+	FNumbers      []FNumbers  `json:"fnumbers" xml:"fnumbers" db:""` // Not directly mapped to the database
 }
 
 // FNumbers represents the fNumber and scanTime fields
 type FNumbers struct {
-	FNumber  string `json:"fNumber" xml:"fNumber"`
-	ScanTime string `json:"scanTime" xml:"scanTime"`
+	FNumber  string `json:"fNumber" xml:"fNumber" db:"fnumber"`
+	ScanTime string `json:"scanTime" xml:"scanTime" db:"scan_time"`
 }
 
 // Data is the top-level tag in the input XML file

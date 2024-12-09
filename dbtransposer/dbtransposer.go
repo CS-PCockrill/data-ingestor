@@ -26,14 +26,14 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 		// Add placeholders for all rows
 		var allPlaceholders []string
 		var allValues []interface{}
-		placeholderIndex := 1
+		//placeholderIndex := 1
 
 		for _, row := range rows {
 			rowPlaceholders := []string{}
-			for range row {
-				rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
-				placeholderIndex++
-			}
+			//for range row {
+			//	rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
+			//	placeholderIndex++
+			//}
 			allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
 			allValues = append(allValues, row...)
 		}
@@ -258,17 +258,6 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 			for j := 0; j < value.Len(); j++ {
 				element := value.Index(j).Interface()
 				elementValue := reflect.ValueOf(element)
-
-				// Ensure columns are only appended once from the first slice element
-				if len(rows) == 0 {
-					for k := 0; k < elementValue.NumField(); k++ {
-						sliceField := elementValue.Type().Field(k)
-						sliceDBTag := sliceField.Tag.Get("db")
-						if sliceDBTag != "" && sliceDBTag != "-" {
-							columns = append(columns, sliceDBTag)
-						}
-					}
-				}
 
 				// Generate a row with base fields and slice element fields
 				row := append([]interface{}{}, baseRow...)

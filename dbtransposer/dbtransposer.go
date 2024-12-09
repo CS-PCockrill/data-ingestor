@@ -41,6 +41,7 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 		// Combine the query with placeholders
 		query += strings.Join(allPlaceholders, ", ")
 
+		fmt.Printf("Query Joined: %v", query)
 		// Execute the query
 		_, err = tx.Exec(query, allValues...)
 		if err != nil {

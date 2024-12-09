@@ -49,8 +49,6 @@ func worker(taskChan <-chan interface{}, resultChan chan<- MapResult, mapFunc Ma
 		// Execute the Map function within the transaction
 		err = mapFunc(tx, tableName, batch)
 	}
-	resultChan <- MapResult{BatchID: batchID, Err: err, Tx: tx}
-
 }
 
 // MapReduce orchestrates the Map and Reduce phases.

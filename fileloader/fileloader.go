@@ -1,11 +1,13 @@
 package fileloader
 
 import (
+	"data-ingestor/models"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 )
 
@@ -19,8 +21,8 @@ func detectFileType(filePath string) (string, error) {
 	return "", errors.New("unsupported file format: must be .json or .xml")
 }
 
-// UnmarshalFile unmarshals the file content into the provided struct based on file type.
-func UnmarshalFile(filePath string, v interface{}) error {
+// unmarshalFile unmarshals the file content into the provided struct based on file type.
+func unmarshalFile(filePath string, v interface{}) error {
 	fileType, err := detectFileType(filePath)
 	if err != nil {
 		return err
@@ -58,5 +60,44 @@ func UnmarshalFile(filePath string, v interface{}) error {
 	}
 
 	return nil
+}
+
+
+func createModel(modelName string) (interface{}, error) {
+	switch modelName {
+	case "MistAMSData":
+		return &models.Record{}, nil
+	default:
+		return nil, fmt.Errorf("unknown model type: %s", modelName)
+	}
+}
+
+
+func DecodeFile(filePath string, modelName string) ([]interface{}, error) {
+	// Create a new instance of the target model
+	model, err := createModel(modelName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read and unmarshal the file
+	var records []interface{}
+	if err := unmarshalFile(filePath, model); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal file: %w", err)
+	}
+
+	// Reflect to process the "Records" field dynamically
+	val := reflect.ValueOf(model).Elem()
+	recordsField := val.FieldByName("Records")
+	if !recordsField.IsValid() {
+		return nil, fmt.Errorf("field 'Records' not found in model %s", modelName)
+	}
+
+	// Collect records into the result slice
+	for i := 0; i < recordsField.Len(); i++ {
+		records = append(records, recordsField.Index(i).Interface())
+	}
+
+	return records, nil
 }
 

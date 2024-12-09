@@ -21,13 +21,13 @@ type Task struct {
 }
 
 // MapFunc defines the function signature for the map phase.
-type MapFunc func(tx *sql.Tx, batch []interface{}) error
+type MapFunc func(tx *sql.Tx, tableName string, batch []interface{}) error
 
 // ReduceFunc defines the function signature for the reduce phase.
 type ReduceFunc func(results []MapResult) error
 
 // worker processes tasks from the taskChan and sends results to resultChan.
-func worker(taskChan <-chan []interface{}, resultChan chan<- MapResult, mapFunc MapFunc, db *sql.DB, batchID int, wg *sync.WaitGroup) {
+func worker(taskChan <-chan []interface{}, resultChan chan<- MapResult, mapFunc MapFunc, db *sql.DB, tableName string, batchID int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for batch := range taskChan {
 		tx, err := db.Begin() // Start a transaction
@@ -37,13 +37,13 @@ func worker(taskChan <-chan []interface{}, resultChan chan<- MapResult, mapFunc 
 		}
 
 		// Execute the Map function within the transaction
-		err = mapFunc(tx, batch)
+		err = mapFunc(tx, tableName, batch)
 		resultChan <- MapResult{BatchID: batchID, Err: err, Tx: tx}
 	}
 }
 
 // MapReduce orchestrates the Map and Reduce phases.
-func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db *sql.DB, workerCount int) error {
+func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db *sql.DB, tableName string, workerCount int) error {
 	// Channels for tasks and results
 	taskChan := make(chan []interface{}, workerCount)
 	resultChan := make(chan MapResult, workerCount)
@@ -52,7 +52,7 @@ func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go worker(taskChan, resultChan, mapFunc, db, i, &wg)
+		go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg)
 	}
 
 	// Split records into batches and feed them to taskChan

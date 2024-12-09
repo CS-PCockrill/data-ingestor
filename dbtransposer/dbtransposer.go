@@ -250,6 +250,7 @@ func extractSQLData(record interface{}) (columns []string, placeholders []string
 		return nil, nil, nil, fmt.Errorf("expected a struct but got %s", v.Kind())
 	}
 
+	fmt.Printf("Type of Struct: %v\nValue: %v", t, v)
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)

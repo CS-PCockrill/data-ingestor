@@ -14,7 +14,7 @@ import (
 
 type TransposerFunctionsInterface interface {
 	// InsertRecords Map function paired with ExtractSQLData
-	InsertRecords(tx *sql.Tx, tableName string, batch <-chan interface{}) error
+	InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error
 	ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error)
 
 	// ProcessMapResults is the Reducer function
@@ -28,14 +28,9 @@ type TransposerFunctions struct {
 
 var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
 
-func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, recordChan <-chan interface{}) error {
-	var rows [][]interface{}
-	var columns []string
-
-	// Process records from the channel
-	for obj := range recordChan {
-		// Extract SQL data for the record
-		extractedColumns, extractedRows, err := mp.ExtractSQLData(obj)
+func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
+	for _, obj := range batch {
+		columns, rows, err := mp.ExtractSQLData(obj)
 		if err != nil {
 			mp.Logger.Error("Failed to extract SQL data",
 				zap.Any("record", obj), // Log the full object
@@ -43,118 +38,50 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, recor
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
 
-		// Retain columns from the first record (assuming consistent schema)
-		if len(columns) == 0 {
-			columns = extractedColumns
+		// Build the base query
+		query := fmt.Sprintf(
+			`INSERT INTO %s (%s) VALUES `,
+			tableName,
+			strings.Join(columns, ", "),
+		)
+
+		// Add placeholders for all rows
+		var allPlaceholders []string
+		var allValues []interface{}
+		placeholderIndex := 1
+
+		for _, row := range rows {
+			rowPlaceholders := []string{}
+			for range row {
+				rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
+				placeholderIndex++
+			}
+			allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
+			allValues = append(allValues, row...)
 		}
 
-		// Append rows for the record
-		rows = append(rows, extractedRows...)
-	}
+		// Combine the query with placeholders
+		query += strings.Join(allPlaceholders, ", ")
 
-	// If no rows are present, return early
-	if len(rows) == 0 {
-		mp.Logger.Warn("No rows to insert")
-		return nil
-	}
-
-	// Build the base query
-	query := fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES `,
-		tableName,
-		strings.Join(columns, ", "),
-	)
-
-	// Add placeholders for all rows
-	var allPlaceholders []string
-	var allValues []interface{}
-	placeholderIndex := 1
-
-	for _, row := range rows {
-		rowPlaceholders := []string{}
-		for range row {
-			rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
-			placeholderIndex++
+		//mp.Logger.Info("Query After Combining: %v", query)
+		// Execute the query
+		_, err = tx.Exec(query, allValues...)
+		if err != nil {
+			mp.Logger.Error("Failed to execute SQL query",
+				zap.String("query", query),
+				zap.Any("record", obj), // Log the full object
+				zap.Error(err))
+			return fmt.Errorf("failed to insert records: %w", err)
 		}
-		allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
-		allValues = append(allValues, row...)
-	}
 
-	// Combine the query with placeholders
-	query += strings.Join(allPlaceholders, ", ")
-
-	// Execute the query
-	_, err := tx.Exec(query, allValues...)
-	if err != nil {
-		mp.Logger.Error("Failed to execute SQL query",
+		// Log successful execution
+		mp.Logger.Info("Successfully executed SQL query",
 			zap.String("query", query),
-			zap.Error(err))
-		return fmt.Errorf("failed to insert records: %w", err)
+			zap.Any("record", obj)) // Log the full object
 	}
-
-	// Log successful execution
-	mp.Logger.Info("Successfully executed SQL query",
-		zap.String("query", query),
-		zap.Int("row_count", len(rows)))
 
 	return nil
 }
-
-
-//func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
-//	for _, obj := range batch {
-//		columns, rows, err := mp.ExtractSQLData(obj)
-//		if err != nil {
-//			mp.Logger.Error("Failed to extract SQL data",
-//				zap.Any("record", obj), // Log the full object
-//				zap.Error(err))
-//			return fmt.Errorf("failed to extract SQL data: %w", err)
-//		}
-//
-//		// Build the base query
-//		query := fmt.Sprintf(
-//			`INSERT INTO %s (%s) VALUES `,
-//			tableName,
-//			strings.Join(columns, ", "),
-//		)
-//
-//		// Add placeholders for all rows
-//		var allPlaceholders []string
-//		var allValues []interface{}
-//		placeholderIndex := 1
-//
-//		for _, row := range rows {
-//			rowPlaceholders := []string{}
-//			for range row {
-//				rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
-//				placeholderIndex++
-//			}
-//			allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
-//			allValues = append(allValues, row...)
-//		}
-//
-//		// Combine the query with placeholders
-//		query += strings.Join(allPlaceholders, ", ")
-//
-//		//mp.Logger.Info("Query After Combining: %v", query)
-//		// Execute the query
-//		_, err = tx.Exec(query, allValues...)
-//		if err != nil {
-//			mp.Logger.Error("Failed to execute SQL query",
-//				zap.String("query", query),
-//				zap.Any("record", obj), // Log the full object
-//				zap.Error(err))
-//			return fmt.Errorf("failed to insert records: %w", err)
-//		}
-//
-//		// Log successful execution
-//		mp.Logger.Info("Successfully executed SQL query",
-//			zap.String("query", query),
-//			zap.Any("record", obj)) // Log the full object
-//	}
-//
-//	return nil
-//}
 
 //// InsertRecords inserts a batch of MistAMSData records into the database.
 //func InsertRecords(tx *sql.Tx, batch []interface{}) error {

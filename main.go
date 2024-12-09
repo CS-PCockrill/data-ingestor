@@ -73,15 +73,13 @@ func main() {
 
 	// Run Stream MapReduce
 	err = mapreduce.MapReduceStreaming(
-		func(stream chan<- interface{}) error { // Stream function for MapReduce
+		func(stream chan interface{}) error { // Stream function for MapReduce
 			for record := range recordChan {
-				stream <- record // Send each record to the stream
+				stream <- record
 			}
 			return nil
 		},
-		func(tx *sql.Tx, tableName string, recordStream <-chan interface{}) error {
-			return dbTransposer.InsertRecords(tx, tableName, recordStream)
-		},
+		dbTransposer.InsertRecords,
 		dbTransposer.ProcessMapResults,
 		app.DB,
 		tableName,

@@ -2,7 +2,6 @@ package dbtransposer
 
 import (
 	"data-ingestor/mapreduce"
-	"data-ingestor/models"
 	"database/sql"
 	"fmt"
 	"log"
@@ -12,38 +11,25 @@ import (
 
 func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 	for _, obj := range batch {
-		columns, placeholders, values, nestedRecords, err := ExtractSQLData(obj)
+		// Extract SQL data from the record
+		columns, placeholders, values, err := ExtractSQLData(obj)
 		if err != nil {
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
 
-		// Insert the base record
-		baseQuery := fmt.Sprintf(
+		// Dynamically generate the query
+		query := fmt.Sprintf(
 			`INSERT INTO %s (%s) VALUES (%s)`,
 			tableName,
 			strings.Join(columns, ", "),
 			strings.Join(placeholders, ", "),
 		)
 
-		fmt.Printf("Extract SQL Data query: %v", baseQuery)
-
-		_, err = tx.Exec(baseQuery, values...)
+		// Execute the query with the extracted values
+		_, err = tx.Exec(query, values...)
 		if err != nil {
-			return fmt.Errorf("failed to insert base record: %w", err)
-		}
-
-		// Insert nested records like FNumbers
-		for _, nestedValues := range nestedRecords {
-			nestedQuery := fmt.Sprintf(
-				`INSERT INTO %s (%s) VALUES (%s)`,
-				tableName,
-				strings.Join(columns, ", "),
-				strings.Join(placeholders, ", "),
-			)
-			_, err := tx.Exec(nestedQuery, nestedValues...)
-			if err != nil {
-				return fmt.Errorf("failed to insert nested record: %w", err)
-			}
+			log.Printf("Failed to insert record %+v: %v", obj, err)
+			return fmt.Errorf("failed to insert record: %w", err)
 		}
 	}
 
@@ -51,75 +37,76 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 }
 
 
-func InsertRecords(tx *sql.Tx, batch []interface{}) error {
-	// Prepare the SQL statement with positional parameters
-	query := `
-		INSERT INTO SFLW_RECS (
-			"user", dt_created, dt_submitted, ast_name, location,
-			status, json_hash, local_id, filename, fnumber, scan_time
-		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9, $10, $11
-		)`
-	stmt, err := tx.Prepare(query)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
 
-	// Iterate over the batch and process each record
-	for _, obj := range batch {
-		// Assert the type of the item
-		record, ok := obj.(models.Record)
-		if !ok {
-			return fmt.Errorf("invalid record type: %T", obj)
-		}
-
-		// If FNumbers exists, insert one row per FNumber
-		if len(record.FNumbers) > 0 {
-			for _, fNumberEntry := range record.FNumbers {
-				_, err := stmt.Exec(
-					record.User,                // $1
-					record.DateCreated,         // $2
-					record.DateSubmitted,       // $3
-					record.AssetName,           // $4 (nullable)
-					record.Location,            // $5
-					record.Status,              // $6
-					record.JsonHash,            // $7
-					record.LocalID,             // $8 (nullable)
-					record.FileName,            // $9
-					fNumberEntry.FNumber,       // $10
-					fNumberEntry.ScanTime,      // $11
-				)
-				if err != nil {
-					log.Printf("Failed to insert record with FNumber %+v: %v", fNumberEntry, err)
-					return fmt.Errorf("failed to insert record: %w", err)
-				}
-			}
-		} else {
-			// If no FNumbers, insert a single row with empty FNumber and ScanTime
-			_, err := stmt.Exec(
-				record.User,          // $1
-				record.DateCreated,   // $2
-				record.DateSubmitted, // $3
-				record.AssetName,     // $4 (nullable)
-				record.Location,      // $5
-				record.Status,        // $6
-				record.JsonHash,      // $7
-				record.LocalID,       // $8 (nullable)
-				record.FileName,      // $9
-				"",                   // $10 (empty FNumber)
-				"",                   // $11 (empty ScanTime)
-			)
-			if err != nil {
-				log.Printf("Failed to insert record without FNumber: %+v: %v", record, err)
-				return fmt.Errorf("failed to insert record: %w", err)
-			}
-		}
-	}
-
-	return nil
-}
+//func InsertRecords(tx *sql.Tx, batch []interface{}) error {
+//	// Prepare the SQL statement with positional parameters
+//	query := `
+//		INSERT INTO SFLW_RECS (
+//			"user", dt_created, dt_submitted, ast_name, location,
+//			status, json_hash, local_id, filename, fnumber, scan_time
+//		) VALUES (
+//			$1, $2, $3, $4, $5,
+//			$6, $7, $8, $9, $10, $11
+//		)`
+//	stmt, err := tx.Prepare(query)
+//	if err != nil {
+//		return fmt.Errorf("failed to prepare statement: %w", err)
+//	}
+//	defer stmt.Close()
+//
+//	// Iterate over the batch and process each record
+//	for _, obj := range batch {
+//		// Assert the type of the item
+//		record, ok := obj.(models.Record)
+//		if !ok {
+//			return fmt.Errorf("invalid record type: %T", obj)
+//		}
+//
+//		// If FNumbers exists, insert one row per FNumber
+//		if len(record.FNumbers) > 0 {
+//			for _, fNumberEntry := range record.FNumbers {
+//				_, err := stmt.Exec(
+//					record.User,                // $1
+//					record.DateCreated,         // $2
+//					record.DateSubmitted,       // $3
+//					record.AssetName,           // $4 (nullable)
+//					record.Location,            // $5
+//					record.Status,              // $6
+//					record.JsonHash,            // $7
+//					record.LocalID,             // $8 (nullable)
+//					record.FileName,            // $9
+//					fNumberEntry.FNumber,       // $10
+//					fNumberEntry.ScanTime,      // $11
+//				)
+//				if err != nil {
+//					log.Printf("Failed to insert record with FNumber %+v: %v", fNumberEntry, err)
+//					return fmt.Errorf("failed to insert record: %w", err)
+//				}
+//			}
+//		} else {
+//			// If no FNumbers, insert a single row with empty FNumber and ScanTime
+//			_, err := stmt.Exec(
+//				record.User,          // $1
+//				record.DateCreated,   // $2
+//				record.DateSubmitted, // $3
+//				record.AssetName,     // $4 (nullable)
+//				record.Location,      // $5
+//				record.Status,        // $6
+//				record.JsonHash,      // $7
+//				record.LocalID,       // $8 (nullable)
+//				record.FileName,      // $9
+//				"",                   // $10 (empty FNumber)
+//				"",                   // $11 (empty ScanTime)
+//			)
+//			if err != nil {
+//				log.Printf("Failed to insert record without FNumber: %+v: %v", record, err)
+//				return fmt.Errorf("failed to insert record: %w", err)
+//			}
+//		}
+//	}
+//
+//	return nil
+//}
 
 
 //// InsertRecords inserts a batch of MistAMSData records into the database.

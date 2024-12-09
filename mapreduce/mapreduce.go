@@ -21,13 +21,13 @@ type Task struct {
 }
 
 // MapFunc defines the function signature for the map phase.
-type MapFunc func(tx *sql.Tx, tableName string, batch []interface{}) error
+type MapFunc func(tx *sql.Tx, tableName string, batch interface{}) error
 
 // ReduceFunc defines the function signature for the reduce phase.
 type ReduceFunc func(results []MapResult) error
 
 // worker processes tasks from the taskChan and sends results to resultChan.
-func worker(taskChan <-chan []interface{}, resultChan chan<- MapResult, mapFunc MapFunc, db *sql.DB, tableName string, batchID int, wg *sync.WaitGroup) {
+func worker(taskChan <-chan interface{}, resultChan chan<- MapResult, mapFunc MapFunc, db *sql.DB, tableName string, batchID int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for batch := range taskChan {
 		tx, err := db.Begin() // Start a transaction
@@ -96,7 +96,7 @@ func MapReduceStreaming(
 ) error {
 	// Channels for streaming records and task batches
 	recordChan := make(chan interface{}, 20)
-	taskChan := make(chan []interface{}, 20)
+	taskChan := make(chan interface{}, 20)
 	resultChan := make(chan MapResult, 20)
 	var wg sync.WaitGroup
 
@@ -110,17 +110,9 @@ func MapReduceStreaming(
 	go func() {
 		defer close(taskChan)
 
-		var batch []interface{}
 		for record := range recordChan {
-			batch = append(batch, record)
-			if len(batch) >= workerCount {
-				taskChan <- batch
-				batch = nil
-			}
-		}
-		// Send remaining records as a batch
-		if len(batch) > 0 {
-			taskChan <- batch
+			taskChan <- record
+
 		}
 	}()
 

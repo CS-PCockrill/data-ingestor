@@ -45,6 +45,7 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 					strings.Join(placeholders, ", "),
 				)
 
+				fmt.Printf("Database Query - %v", query)
 				// Execute the query
 				if _, err := tx.Exec(query, valuesWithFNumber...); err != nil {
 					log.Printf("Failed to insert record with FNumber %+v: %v", fNumberEntry, err)

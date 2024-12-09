@@ -16,14 +16,14 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
 
-		// Build the base query
+		// Construct the base query
 		query := fmt.Sprintf(
 			`INSERT INTO %s (%s) VALUES `,
 			tableName,
 			strings.Join(columns, ", "),
 		)
 
-		// Add placeholders for each row
+		// Add placeholders for all rows
 		var allPlaceholders []string
 		var allValues []interface{}
 		placeholderIndex := 1
@@ -50,6 +50,7 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 
 	return nil
 }
+
 
 
 
@@ -233,6 +234,7 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 
 	baseRow := []interface{}{}
 	columns = []string{}
+	rows = [][]interface{}{}
 
 	// Iterate over fields in the struct
 	for i := 0; i < t.NumField(); i++ {
@@ -240,16 +242,19 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 		value := v.Field(i)
 
 		dbTag := field.Tag.Get("db")
+		if dbTag == "-" || dbTag == "" {
+			continue // Skip fields without a valid "db" tag
+		}
+
 		if field.Anonymous {
 			// Handle embedded anonymous structs
 			nestedColumns, nestedRows, nestedErr := ExtractSQLData(value.Interface())
 			if nestedErr != nil {
 				return nil, nil, nestedErr
 			}
-
 			columns = append(columns, nestedColumns...)
 			if len(nestedRows) > 0 {
-				baseRow = append(baseRow, nestedRows[0]...) // Add the first row for anonymous fields
+				baseRow = append(baseRow, nestedRows[0]...)
 			}
 		} else if value.Kind() == reflect.Slice {
 			// Handle slices by generating multiple rows
@@ -260,20 +265,10 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 					return nil, nil, elementErr
 				}
 
-				if len(rows) == 0 {
-					// Initialize rows if this is the first slice processed
-					for _, row := range elementRows {
-						rows = append(rows, append(append([]interface{}{}, baseRow...), row...))
-					}
-				} else {
-					// Duplicate rows for each slice element
-					var newRows [][]interface{}
-					for _, existingRow := range rows {
-						for _, row := range elementRows {
-							newRows = append(newRows, append(append([]interface{}{}, existingRow...), row...))
-						}
-					}
-					rows = newRows
+				// For each slice element, create a new row by combining base row with element data
+				for _, elementRow := range elementRows {
+					combinedRow := append(append([]interface{}{}, baseRow...), elementRow...)
+					rows = append(rows, combinedRow)
 				}
 
 				// Append slice-specific columns only once
@@ -282,16 +277,12 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 				}
 			}
 		} else {
-			if dbTag == "-" || dbTag == "" {
-				continue // Skip fields without a "db" tag or explicitly ignored
-			}
 			// Normal fields
-			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
+			columns = append(columns, dbTag)
 			baseRow = append(baseRow, value.Interface())
 		}
 	}
 
-	fmt.Printf("Columns: %v\nRows: %v", columns, rows)
 	// If no slices were processed, use the base row as a single entry
 	if len(rows) == 0 {
 		rows = [][]interface{}{baseRow}
@@ -299,3 +290,4 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 
 	return columns, rows, nil
 }
+

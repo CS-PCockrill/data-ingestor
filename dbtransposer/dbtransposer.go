@@ -239,6 +239,7 @@ func ExtractSQLData(record interface{}) (columns []string, placeholders []string
 			values = append(values, nestedValues...)
 		} else if field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array || value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
 			// Handle slices/arrays by flattening
+			fmt.Printf("Values flattening: %v", value)
 			for j := 0; j < value.Len(); j++ {
 				sliceValue := value.Index(j).Interface()
 				columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))

@@ -73,9 +73,9 @@ func main() {
 
 	// Run Stream MapReduce
 	err = mapreduce.MapReduceStreaming(
-		func(stream chan interface{}) error { // Stream function for MapReduce
+		func(stream chan<- interface{}) error { // Stream function for MapReduce
 			for record := range recordChan {
-				stream <- record
+				stream <- record // Send each record to the stream
 			}
 			return nil
 		},

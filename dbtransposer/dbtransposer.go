@@ -26,14 +26,14 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 		// Add placeholders for all rows
 		var allPlaceholders []string
 		var allValues []interface{}
-		//placeholderIndex := 1
+		placeholderIndex := 1
 
 		for _, row := range rows {
 			rowPlaceholders := []string{}
-			//for range row {
-			//	rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
-			//	placeholderIndex++
-			//}
+			for range row {
+				rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
+				placeholderIndex++
+			}
 			allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
 			allValues = append(allValues, row...)
 		}

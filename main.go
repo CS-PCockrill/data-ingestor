@@ -19,6 +19,81 @@ type App struct {
 	DB *sql.DB
 }
 
+func main() {
+	app, err := NewApp()
+	if err != nil {
+		log.Fatalf("Error initializing application: %v", err)
+	}
+	defer app.Close()
+
+	// Define a command-line flag for the input file
+	var inputFile string
+	var modelName string
+	var tableName string
+
+	// Command-line flags
+	flag.StringVar(&inputFile, "file", "", "Path to the input file (JSON or XML)")
+	flag.StringVar(&modelName, "model", "", "Target model type (e.g., 'MistAMS')")
+	flag.StringVar(&tableName, "table", "", "Database table name for inserts (e.g., SFLW_RECS)")
+	flag.Parse()
+
+	if inputFile == "" || modelName == "" || tableName == "" {
+		log.Fatalf("Error: -file, -model, and -table flags are required..\n\tUsage: go run main.go -file test-loader.json -model MistAMSData -table SFLW_RECS")
+		return
+	}
+
+	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config}
+	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger}
+
+	// Decode the file and map records
+	//records, err := fileLoader.DecodeFile(inputFile, modelName)
+	//if err != nil {
+	//	log.Fatalf("Error decoding input file %s - %v", inputFile, err)
+	//	return
+	//}
+	//
+	//// Run MapReduce
+	//err = mapreduce.MapReduce(records, dbTransposer.InsertRecords, dbTransposer.ProcessMapResults, app.DB, tableName, app.Config.Runtime.WorkerCount)
+	//if err != nil {
+	//	log.Fatalf("MapReduce failed: %v", err)
+	//} else {
+	//	log.Printf("MapReduce completed successfully, inserted %d records", len(records))
+	//}
+
+	// Channel to stream records
+	recordChan := make(chan interface{}, app.Config.Runtime.WorkerCount)
+
+	// Start streaming the file into the record channel
+	go func() {
+		if err := fileLoader.StreamDecodeFile(inputFile, recordChan, modelName); err != nil {
+			log.Fatalf("Error streaming input file %s - %v", inputFile, err)
+		}
+		close(recordChan)
+	}()
+
+	// Run Stream MapReduce
+	err = mapreduce.MapReduceStreaming(
+		func(stream chan interface{}) error { // Stream function for MapReduce
+			for record := range recordChan {
+				stream <- record
+			}
+			return nil
+		},
+		dbTransposer.InsertRecords,
+		dbTransposer.ProcessMapResults,
+		app.DB,
+		tableName,
+		app.Config.Runtime.WorkerCount,
+	)
+
+	if err != nil {
+		log.Fatalf("Stream MapReduce failed: %v", err)
+	} else {
+		log.Println("Stream MapReduce completed successfully")
+	}
+
+}
+
 // NewApp initializes the App with dependencies
 func NewApp() (*App, error) {
 	cfg := config.GetConfig()
@@ -41,49 +116,6 @@ func NewApp() (*App, error) {
 
 	db.SetMaxOpenConns(cfg.Runtime.WorkerCount)
 	return &App{Config: cfg, Logger: logger, DB: db}, nil
-}
-
-func main() {
-	app, err := NewApp()
-	if err != nil {
-		log.Fatalf("Error initializing application: %v", err)
-	}
-	defer app.Close()
-
-	// Define a command-line flag for the input file
-	var inputFile string
-	var modelName string
-	var tableName string
-
-	// Command-line flags
-	flag.StringVar(&inputFile, "file", "", "Path to the input file (JSON or XML)")
-	flag.StringVar(&modelName, "model", "", "Target model type (e.g., 'MistAMSData')")
-	flag.StringVar(&tableName, "table", "", "Database table name for inserts (e.g., SFLW_RECS)")
-	flag.Parse()
-
-	if inputFile == "" || modelName == "" || tableName == "" {
-		log.Fatalf("Error: -file, -model, and -table flags are required..\n\tUsage: go run main.go -file test-loader.json -model MistAMSData -table SFLW_RECS")
-		return
-	}
-
-	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config}
-	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config}
-
-	// Decode the file and map records
-	records, err := fileLoader.DecodeFile(inputFile, modelName)
-	if err != nil {
-		log.Fatalf("Error decoding input file %s - %v", inputFile, err)
-		return
-	}
-
-	// Run MapReduce
-	err = mapreduce.MapReduce(records, dbTransposer.InsertRecords, dbTransposer.ProcessMapResults, app.DB, tableName, app.Config.Runtime.WorkerCount)
-	if err != nil {
-		log.Fatalf("MapReduce failed: %v", err)
-	} else {
-		log.Printf("MapReduce completed successfully, inserted %d records", len(records))
-	}
-
 }
 
 func (app *App) Close() {

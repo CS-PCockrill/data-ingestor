@@ -2,9 +2,11 @@ package dbtransposer
 
 import (
 	"data-ingestor/config"
+	"data-ingestor/fileloader"
 	"data-ingestor/mapreduce"
 	"database/sql"
 	"fmt"
+	"go.uber.org/zap"
 	"log"
 	"reflect"
 	"strings"
@@ -21,6 +23,7 @@ type TransposerFunctionsInterface interface {
 
 type TransposerFunctions struct {
 	CONFIG *config.Config
+	Logger *zap.Logger
 }
 
 var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
@@ -29,6 +32,9 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, batch
 	for _, obj := range batch {
 		columns, rows, err := mp.ExtractSQLData(obj)
 		if err != nil {
+			mp.Logger.Error("Failed to extract SQL data",
+				zap.Any("record", obj), // Log the full object
+				zap.Error(err))
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
 
@@ -57,12 +63,21 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, batch
 		// Combine the query with placeholders
 		query += strings.Join(allPlaceholders, ", ")
 
-		fmt.Printf("Query Joined: %v\n", query)
+		//mp.Logger.Info("Query After Combining: %v", query)
 		// Execute the query
 		_, err = tx.Exec(query, allValues...)
 		if err != nil {
+			mp.Logger.Error("Failed to execute SQL query",
+				zap.String("query", query),
+				zap.Any("record", obj), // Log the full object
+				zap.Error(err))
 			return fmt.Errorf("failed to insert records: %w", err)
 		}
+
+		// Log successful execution
+		mp.Logger.Info("Successfully executed SQL query",
+			zap.String("query", query),
+			zap.Any("record", obj)) // Log the full object
 	}
 
 	return nil
@@ -154,7 +169,6 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 			for j := 0; j < value.Len(); j++ {
 				element := value.Index(j).Interface()
 				elementValue := reflect.ValueOf(element)
-
 				// Create a copy of the base row to avoid overwriting
 				row := make([]interface{}, len(baseRow))
 				copy(row, baseRow)
@@ -175,11 +189,9 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 						}
 					}
 				}
-
 				// Add the completed row
 				rows = append(rows, row)
 			}
-
 		} else {
 			// Add normal fields to base row
 			if dbTag == "-" || dbTag == "" {
@@ -195,8 +207,73 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 		rows = [][]interface{}{baseRow}
 	}
 
-	fmt.Printf("Columns: %s\nRows: %v\n\n", columns, rows)
 	return columns, rows, nil
+}
+
+//func (mp *TransposerFunctions) StreamMapFunc(tx *sql.Tx, record interface{}) error {
+//	// Use ExtractSQLData to prepare SQL data dynamically
+//	columns, rows, err := mp.ExtractSQLData(record)
+//	if err != nil {
+//		return fmt.Errorf("failed to extract SQL data: %w", err)
+//	}
+//
+//	// Prepare SQL query
+//	query := fmt.Sprintf(`INSERT INTO SFLW_RECS (%s) VALUES (%s)`,
+//		strings.Join(columns, ", "),
+//		strings.Repeat("$1, ", len(columns)-1)+"$"+strconv.Itoa(len(columns)),
+//	)
+//
+//	// Execute the query for each row
+//	for _, row := range rows {
+//		_, err := tx.Exec(query, row...)
+//		if err != nil {
+//			return fmt.Errorf("failed to execute query: %w", err)
+//		}
+//	}
+//	return nil
+//}
+
+// MapReduceStreaming orchestrates the map and reduce phases with streaming
+func MapReduceStreaming(
+	logger *zap.Logger,
+	tx *sql.Tx,
+	filePath string,
+	mapFunc func(tx *sql.Tx, record interface{}) error,
+	reduceFunc func() error,
+) error {
+	recordChan := make(chan interface{})
+	errChan := make(chan error)
+
+	// Start streaming records
+	go func() {
+		if err := fileloader.StreamFile(filePath, recordChan); err != nil {
+			errChan <- err
+			close(errChan)
+			return
+		}
+		close(errChan)
+	}()
+
+	// Map phase: Process records as they stream
+	for record := range recordChan {
+		if err := mapFunc(tx, record); err != nil {
+			logger.Error("Error processing record", zap.Any("record", record), zap.Error(err))
+			return fmt.Errorf("map phase error: %w", err)
+		}
+	}
+
+	// Check for streaming errors
+	if err := <-errChan; err != nil {
+		return fmt.Errorf("file streaming error: %w", err)
+	}
+
+	// Reduce phase: Final aggregation or cleanup
+	if err := reduceFunc(); err != nil {
+		return fmt.Errorf("reduce phase error: %w", err)
+	}
+
+	logger.Info("MapReduce completed successfully")
+	return nil
 }
 
 func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) error {

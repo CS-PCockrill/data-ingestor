@@ -84,3 +84,66 @@ func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db
 	// Perform Reduce phase
 	return reduceFunc(results)
 }
+
+// MapReduceStreaming orchestrates the Map and Reduce phases with streaming.
+func MapReduceStreaming(
+	fileLoader func(chan interface{}) error, // Function to stream records from a file
+	mapFunc MapFunc,                         // Function to handle Map phase
+	reduceFunc ReduceFunc,                   // Function to handle Reduce phase
+	db *sql.DB,                              // Database connection
+	tableName string,                        // Database table name
+	workerCount int,                         // Number of workers
+) error {
+	// Channels for streaming records and task batches
+	recordChan := make(chan interface{}, workerCount)
+	taskChan := make(chan []interface{}, workerCount)
+	resultChan := make(chan MapResult, workerCount)
+	var wg sync.WaitGroup
+
+	// Start workers
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg)
+	}
+
+	// Stream records from the file and create batches
+	go func() {
+		defer close(taskChan)
+
+		var batch []interface{}
+		for record := range recordChan {
+			batch = append(batch, record)
+			if len(batch) >= workerCount {
+				taskChan <- batch
+				batch = nil
+			}
+		}
+		// Send remaining records as a batch
+		if len(batch) > 0 {
+			taskChan <- batch
+		}
+	}()
+
+	// Start file loading (streaming records)
+	go func() {
+		if err := fileLoader(recordChan); err != nil {
+			close(recordChan) // Ensure recordChan is closed if there's an error
+		}
+		close(recordChan)
+	}()
+
+	// Wait for workers to finish
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results
+	var results []MapResult
+	for result := range resultChan {
+		results = append(results, result)
+	}
+
+	// Perform Reduce phase
+	return reduceFunc(results)
+}

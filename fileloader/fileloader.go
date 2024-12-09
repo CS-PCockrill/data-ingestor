@@ -10,11 +10,12 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 )
 
 type LoaderFunctionsInterface interface {
 	DecodeFile(filePath, modelName string) ([]interface{}, error)
-	ParseXMLConsecutiveRecords(filePath string) ([]models.Record, error)
+	StreamDecodeFile(filePath string, recordChan chan interface{}, modelName string) error
 }
 
 type LoaderFunctions struct {
@@ -26,6 +27,84 @@ var _ LoaderFunctionsInterface = (*LoaderFunctions)(nil)
 func (l *LoaderFunctions) DecodeFile(filePath, modelName string) ([]interface{}, error) {
 	return l.createModel(modelName, filePath)
 }
+
+// StreamDecodeFile is the streaming equivalent of DecodeFile for MapReduce.
+func (l *LoaderFunctions) StreamDecodeFile(filePath string, recordChan chan interface{}, modelName string) error {
+	fileType, err := detectFileType(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to detect file type: %w", err)
+	}
+
+	switch fileType {
+	case "json":
+		return StreamJSONFile(filePath, recordChan, modelName)
+	case "xml":
+		return StreamXMLFile(filePath, recordChan, modelName)
+	default:
+		return fmt.Errorf("unsupported file type: %s", fileType)
+	}
+}
+
+// StreamJSONFile streams records from a JSON file.
+func StreamJSONFile(filePath string, recordChan chan interface{}, modelName string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open JSON file: %w", err)
+	}
+
+	decoder := json.NewDecoder(file)
+	if modelName == "Records" {
+		// Top-level array
+		var records []models.Record
+		if err := decoder.Decode(&records); err != nil {
+			return fmt.Errorf("failed to decode JSON: %w", err)
+		}
+		for _, record := range records {
+			recordChan <- record
+		}
+	} else {
+		// Individual objects
+		for decoder.More() {
+			var record models.Record
+			if err := decoder.Decode(&record); err != nil {
+				return fmt.Errorf("failed to decode JSON record: %w", err)
+			}
+			recordChan <- record
+		}
+	}
+	return nil
+}
+
+// StreamXMLFile streams records from an XML file.
+func StreamXMLFile(filePath string, recordChan chan interface{}, modelName string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open XML file: %w", err)
+	}
+
+	decoder := xml.NewDecoder(file)
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read XML token: %w", err)
+		}
+
+		// FIXME: Record is hardcoded and should be mapped to a config variable/input parameter
+		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
+			var record models.Record
+			if err := decoder.DecodeElement(&record, &se); err != nil {
+				return fmt.Errorf("failed to decode XML record: %w", err)
+			}
+			time.Sleep(1*time.Second)
+			recordChan <- record
+		}
+	}
+	return nil
+}
+
 
 func (l *LoaderFunctions) createModel(modelName string, filePath string) ([]interface{}, error) {
 	// Detect file type (JSON or XML)
@@ -52,7 +131,7 @@ func (l *LoaderFunctions) createModel(modelName string, filePath string) ([]inte
 	case "Record":
 		if fileType == "xml" {
 			// Parse consecutive <Record> elements (XML only)
-			rawRecords, err := l.ParseXMLConsecutiveRecords(filePath)
+			rawRecords, err := l.parseXMLConsecutiveRecords(filePath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse consecutive records: %w", err)
 			}
@@ -105,8 +184,8 @@ func unmarshalFile(filePath, fileType string, v interface{}) error {
 	return nil
 }
 
-// ParseXMLConsecutiveRecords Parses consecutive <Record> elements in an XML file
-func (l *LoaderFunctions) ParseXMLConsecutiveRecords(filePath string) ([]models.Record, error) {
+// parseXMLConsecutiveRecords Parses consecutive <Record> elements in an XML file
+func (l *LoaderFunctions) parseXMLConsecutiveRecords(filePath string) ([]models.Record, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -160,5 +239,67 @@ func detectFileType(filePath string) (string, error) {
 	return "", errors.New("unsupported file format: must be .json or .xml")
 }
 
+// StreamFile opens the file and streams records one by one
+func StreamFile(filePath string, recordChan chan interface{}) error {
+	fileType, _ := detectFileType(filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	//defer file.Close()
+
+	switch fileType {
+	case "xml":
+		return streamXML(file, recordChan)
+	case "json":
+		return streamJSON(file, recordChan)
+	default:
+		return fmt.Errorf("unsupported file type: %s", fileType)
+	}
+}
+
+func streamXML(file *os.File, recordChan chan interface{}) error {
+	decoder := xml.NewDecoder(file)
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			if err.Error() == "EOF" {
+				close(recordChan)
+				return nil
+			}
+			return fmt.Errorf("error reading XML token: %w", err)
+		}
+
+		if startElement, ok := token.(xml.StartElement); ok && startElement.Name.Local == "Record" {
+			var record models.Record // Replace with your record type
+			if err := decoder.DecodeElement(&record, &startElement); err != nil {
+				return fmt.Errorf("error decoding record: %w", err)
+			}
+			recordChan <- record
+		}
+	}
+}
+
+func streamJSON(file *os.File, recordChan chan interface{}) error {
+	decoder := json.NewDecoder(file)
+
+	tok, err := decoder.Token()
+	if err != nil {
+		return fmt.Errorf("error reading JSON token: %w", err)
+	}
+	if tok != json.Delim('[') {
+		return fmt.Errorf("expected JSON array, got %v", tok)
+	}
+
+	for decoder.More() {
+		var record models.Record // Replace with your record type
+		if err := decoder.Decode(&record); err != nil {
+			return fmt.Errorf("error decoding record: %w", err)
+		}
+		recordChan <- record
+	}
+	close(recordChan)
+	return nil
+}
 
 

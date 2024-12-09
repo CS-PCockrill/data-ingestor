@@ -10,61 +10,36 @@ import (
 )
 
 func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
-	if len(batch) == 0 {
-		return nil
-	}
-
-	// Iterate over the batch and process each record
 	for _, obj := range batch {
-		// Dynamically extract columns, placeholders, and values using reflection
-		columns, placeholders, values, err := extractSQLData(obj)
+		columns, placeholders, values, nestedRecords, err := ExtractSQLData(obj)
 		if err != nil {
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
 
-		// Check for FNumbers and handle one row per FNumber
-		recordValue := reflect.ValueOf(obj)
-		fNumbersField := recordValue.FieldByName("FNumbers")
-		if fNumbersField.IsValid() && fNumbersField.Kind() == reflect.Slice {
-			// Iterate over each FNumber entry
-			for i := 0; i < fNumbersField.Len(); i++ {
-				fNumberEntry := fNumbersField.Index(i).Interface()
+		// Insert the base record
+		baseQuery := fmt.Sprintf(
+			`INSERT INTO %s (%s) VALUES (%s)`,
+			tableName,
+			strings.Join(columns, ", "),
+			strings.Join(placeholders, ", "),
+		)
 
-				// Add FNumber and ScanTime dynamically
-				entryValue := reflect.ValueOf(fNumberEntry)
-				valuesWithFNumber := append(values,
-					entryValue.FieldByName("FNumber").Interface(),
-					entryValue.FieldByName("ScanTime").Interface(),
-				)
+		_, err = tx.Exec(baseQuery, values...)
+		if err != nil {
+			return fmt.Errorf("failed to insert base record: %w", err)
+		}
 
-				// Build the query dynamically
-				query := fmt.Sprintf(
-					"INSERT INTO %s (%s, fnumber, scan_time) VALUES (%s, ?, ?)",
-					tableName,
-					strings.Join(columns, ", "),
-					strings.Join(placeholders, ", "),
-				)
-
-				fmt.Printf("Database Query - %v", query)
-				// Execute the query
-				if _, err := tx.Exec(query, valuesWithFNumber...); err != nil {
-					log.Printf("Failed to insert record with FNumber %+v: %v", fNumberEntry, err)
-					return fmt.Errorf("failed to insert record: %w", err)
-				}
-			}
-		} else {
-			// No FNumbers: Insert a single row
-			query := fmt.Sprintf(
-				"INSERT INTO %s (%s) VALUES (%s)",
+		// Insert nested records like FNumbers
+		for _, nestedValues := range nestedRecords {
+			nestedQuery := fmt.Sprintf(
+				`INSERT INTO %s (%s) VALUES (%s)`,
 				tableName,
 				strings.Join(columns, ", "),
 				strings.Join(placeholders, ", "),
 			)
-
-			// Execute the query
-			if _, err := tx.Exec(query, values...); err != nil {
-				log.Printf("Failed to insert record %+v: %v", obj, err)
-				return fmt.Errorf("failed to insert record: %w", err)
+			_, err := tx.Exec(nestedQuery, nestedValues...)
+			if err != nil {
+				return fmt.Errorf("failed to insert nested record: %w", err)
 			}
 		}
 	}
@@ -237,7 +212,7 @@ func ProcessMapResults(results []mapreduce.MapResult) error {
 	return nil
 }
 
-func extractSQLData(record interface{}) (columns []string, placeholders []string, values []interface{}, err error) {
+func ExtractSQLData(record interface{}) (columns []string, placeholders []string, values []interface{}, nestedRecords [][]interface{}, err error) {
 	v := reflect.ValueOf(record)
 	t := reflect.TypeOf(record)
 
@@ -247,10 +222,9 @@ func extractSQLData(record interface{}) (columns []string, placeholders []string
 	}
 
 	if v.Kind() != reflect.Struct {
-		return nil, nil, nil, fmt.Errorf("expected a struct but got %s", v.Kind())
+		return nil, nil, nil, nil, fmt.Errorf("expected a struct but got %s", v.Kind())
 	}
 
-	fmt.Printf("Type of Struct: %v\nValue: %v", t, v)
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)
@@ -258,26 +232,35 @@ func extractSQLData(record interface{}) (columns []string, placeholders []string
 		// Check for DB tags
 		dbTag := field.Tag.Get("db")
 		if dbTag == "" || dbTag == "-" {
-			// Skip fields without a "db" tag or explicitly ignored
-			continue
+			continue // Skip fields without a "db" tag or explicitly ignored
 		}
 
 		if field.Anonymous {
-			// Handle embedded structs (anonymous fields)
-			nestedColumns, nestedPlaceholders, nestedValues, nestedErr := extractSQLData(value.Interface())
+			// Handle anonymous structs (flattened fields)
+			nestedColumns, nestedPlaceholders, nestedValues, nestedNestedRecords, nestedErr := ExtractSQLData(value.Interface())
 			if nestedErr != nil {
-				return nil, nil, nil, fmt.Errorf("failed to extract nested struct data: %w", nestedErr)
+				return nil, nil, nil, nil, nestedErr
 			}
 			columns = append(columns, nestedColumns...)
 			placeholders = append(placeholders, nestedPlaceholders...)
 			values = append(values, nestedValues...)
+			nestedRecords = append(nestedRecords, nestedNestedRecords...)
+		} else if field.Type.Kind() == reflect.Slice && dbTag == "fnumbers" {
+			// Handle slice of nested records like FNumbers
+			for j := 0; j < value.Len(); j++ {
+				nestedRecord := value.Index(j).Interface()
+				_, _, nestedValues, _, nestedErr := ExtractSQLData(nestedRecord)
+				if nestedErr != nil {
+					return nil, nil, nil, nil, nestedErr
+				}
+				nestedRecords = append(nestedRecords, nestedValues)
+			}
 		} else {
-			// Add field data to columns, placeholders, and values
 			columns = append(columns, dbTag)
 			placeholders = append(placeholders, fmt.Sprintf("$%d", len(values)+1))
 			values = append(values, value.Interface())
 		}
 	}
 
-	return columns, placeholders, values, nil
+	return columns, placeholders, values, nestedRecords, nil
 }

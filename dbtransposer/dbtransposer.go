@@ -243,8 +243,6 @@ func extractSQLData(record interface{}) (columns []string, placeholders []string
 		return nil, nil, nil, fmt.Errorf("expected struct type but got %T", record)
 	}
 
-	fmt.Printf("Value in Extract - %v", val)
-
 	typ := val.Type()
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
@@ -252,6 +250,8 @@ func extractSQLData(record interface{}) (columns []string, placeholders []string
 		if tag == "" || tag == "-" {
 			continue // Skip fields without "db" tags or explicitly ignored
 		}
+
+		fmt.Printf("Value in Extract - %v", field)
 
 		columns = append(columns, tag)
 		placeholders = append(placeholders, "?")

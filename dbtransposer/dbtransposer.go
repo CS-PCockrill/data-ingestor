@@ -11,31 +11,44 @@ import (
 
 func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 	for _, obj := range batch {
-		// Extract SQL data from the record
-		columns, placeholders, values, err := ExtractSQLData(obj)
+		// Extract SQL data
+		columns, _, rows, err := ExtractSQLData(obj)
 		if err != nil {
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
 
-		// Dynamically generate the query
+		// Dynamically build the INSERT query
+		placeholderIndex := 1
+		var placeholders []string
+		var values []interface{}
+
+		for _, row := range rows {
+			rowPlaceholders := make([]string, len(row))
+			for i := range row {
+				rowPlaceholders[i] = fmt.Sprintf("$%d", placeholderIndex)
+				placeholderIndex++
+			}
+			placeholders = append(placeholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
+			values = append(values, row...)
+		}
+
 		query := fmt.Sprintf(
-			`INSERT INTO %s (%s) VALUES (%s)`,
+			`INSERT INTO %s (%s) VALUES %s`,
 			tableName,
 			strings.Join(columns, ", "),
 			strings.Join(placeholders, ", "),
 		)
 
-		// Execute the query with the extracted values
+		fmt.Printf("Executing query - %v\n", query)
+		// Execute the multi-row INSERT
 		_, err = tx.Exec(query, values...)
 		if err != nil {
-			log.Printf("Failed to insert record %+v: %v", obj, err)
-			return fmt.Errorf("failed to insert record: %w", err)
+			return fmt.Errorf("failed to execute multi-row insert: %w", err)
 		}
 	}
 
 	return nil
 }
-
 
 
 //func InsertRecords(tx *sql.Tx, batch []interface{}) error {
@@ -202,7 +215,7 @@ func ProcessMapResults(results []mapreduce.MapResult) error {
 	return nil
 }
 
-func ExtractSQLData(record interface{}) (columns []string, placeholders []string, values []interface{}, err error) {
+func ExtractSQLData(record interface{}) ([]string, []string, [][]interface{}, error) {
 	v := reflect.ValueOf(record)
 	t := reflect.TypeOf(record)
 
@@ -215,48 +228,64 @@ func ExtractSQLData(record interface{}) (columns []string, placeholders []string
 		return nil, nil, nil, fmt.Errorf("expected a struct but got %s", v.Kind())
 	}
 
+	var columns []string
+	var placeholders []string
+	var rows [][]interface{} // Each row for SQL insertion
+	var baseValues []interface{} // Values without slice fields
+
 	placeholderIndex := 1
+
+	// Keep track of slice fields
+	sliceFieldRows := [][]interface{}{}
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)
 
-		// Check if the field has a "db" tag
+		// Check for db tag
 		dbTag := field.Tag.Get("db")
 		if dbTag == "" || dbTag == "-" {
-			continue // Skip fields without a "db" tag or explicitly ignored
+			continue
 		}
 
-		if field.Anonymous {
-			// Handle embedded anonymous structs
-			nestedColumns, nestedPlaceholders, nestedValues, nestedErr := ExtractSQLData(value.Interface())
-			if nestedErr != nil {
-				return nil, nil, nil, nestedErr
-			}
-
-			columns = append(columns, nestedColumns...)
-			placeholders = append(placeholders, nestedPlaceholders...)
-			values = append(values, nestedValues...)
-		} else if value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
-			// Handle slices/arrays by flattening
+		if value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
+			// Handle slices/arrays
 			for j := 0; j < value.Len(); j++ {
-				sliceValue := value.Index(j).Interface()
-				columns = append(columns, dbTag)
-				placeholders = append(placeholders, fmt.Sprintf("$%d", placeholderIndex))
-				placeholderIndex++
-				values = append(values, sliceValue)
+				sliceElement := value.Index(j).Interface()
+				nestedColumns, _, nestedValues, err := ExtractSQLData(sliceElement)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+
+				// Ensure columns match
+				if len(columns) == 0 {
+					columns = append(columns, nestedColumns...)
+				}
+
+				sliceFieldRows = append(sliceFieldRows, nestedValues[0]) // Flatten slice values
 			}
 		} else {
-			// Add normal fields
-			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
+			// Handle standard fields
+			columns = append(columns, dbTag)
 			placeholders = append(placeholders, fmt.Sprintf("$%d", placeholderIndex))
 			placeholderIndex++
-			values = append(values, value.Interface())
+			baseValues = append(baseValues, value.Interface())
 		}
 	}
 
-	fmt.Printf("Columns: %v\nPlaceholders: %v\nValues: %v\n", columns, placeholders, values)
-	return columns, placeholders, values, nil
+	// Combine base values with slice field rows
+	if len(sliceFieldRows) > 0 {
+		for _, sliceRow := range sliceFieldRows {
+			fullRow := append(baseValues, sliceRow...)
+			rows = append(rows, fullRow)
+		}
+	} else {
+		// If no slices, just use base values
+		rows = append(rows, baseValues)
+	}
+
+	return columns, placeholders, rows, nil
 }
+
 
 

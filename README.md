@@ -17,21 +17,24 @@ XML-JSON Loader is a Go-based application designed to parse XML and JSON files c
 - [Dependencies](#dependencies)
   - [Dependency Management](#dependency-management)
 
+
 ##**Installation**
+
 Clone the repository:
 ```shell
 git clone https://github.com/yourusername/xml-json-loader.git
 cd xml-json-loader
-````
+```
 Install dependencies:
 ```shell
 go mod tidy
 go mod vendor
-````
+```
 Build the application:
 ```shell
 go build -o loader
-````
+```
+
 ##**Usage**
 
 Command-Line Options
@@ -50,6 +53,7 @@ Sample Output
 Processing file: test-loader.json
 Parsed 10 records successfully.
 All records inserted into the database.
+
 ##**Configuration**
 
 ### Run a Postgres Container

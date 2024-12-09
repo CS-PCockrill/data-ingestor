@@ -213,13 +213,31 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 				element := value.Index(j).Interface()
 				elementValue := reflect.ValueOf(element)
 
-				// Generate a row with base fields and slice element fields
-				row := append([]interface{}{}, baseRow...)
+				// Create a copy of the base row to avoid overwriting
+				row := make([]interface{}, len(baseRow))
+				copy(row, baseRow)
+
+				// Set the slice element values into the appropriate indices
 				for k := 0; k < elementValue.NumField(); k++ {
-					row = append(row, elementValue.Field(k).Interface())
+					sliceField := elementValue.Type().Field(k)
+					sliceDBTag := sliceField.Tag.Get("db")
+					if sliceDBTag == "" || sliceDBTag == "-" {
+						continue // Skip fields without a "db" tag
+					}
+
+					// Find the index of the slice field in the column list
+					for colIdx, colName := range columns {
+						if colName == fmt.Sprintf(`"%s"`, sliceDBTag) {
+							row[colIdx] = elementValue.Field(k).Interface()
+							break
+						}
+					}
 				}
+
+				// Add the completed row
 				rows = append(rows, row)
 			}
+
 		} else {
 			// Add normal fields to base row
 			if dbTag == "-" || dbTag == "" {

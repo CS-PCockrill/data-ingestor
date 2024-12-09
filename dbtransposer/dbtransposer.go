@@ -1,6 +1,7 @@
 package dbtransposer
 
 import (
+	"data-ingestor/config"
 	"data-ingestor/mapreduce"
 	"database/sql"
 	"fmt"
@@ -9,9 +10,24 @@ import (
 	"strings"
 )
 
-func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
+type TransposerFunctionsInterface interface {
+	// InsertRecords Map function paired with ExtractSQLData
+	InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error
+	ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error)
+
+	// ProcessMapResults is the Reducer function
+	ProcessMapResults(results []mapreduce.MapResult) error
+}
+
+type TransposerFunctions struct {
+	CONFIG *config.Config
+}
+
+var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
+
+func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 	for _, obj := range batch {
-		columns, rows, err := ExtractSQLData(obj)
+		columns, rows, err := mp.ExtractSQLData(obj)
 		if err != nil {
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
@@ -30,8 +46,7 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 
 		for _, row := range rows {
 			rowPlaceholders := []string{}
-			for i, r := range row {
-				fmt.Printf("Row[%d]: %v\n", i, r)
+			for range row {
 				rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
 				placeholderIndex++
 			}
@@ -42,7 +57,7 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 		// Combine the query with placeholders
 		query += strings.Join(allPlaceholders, ", ")
 
-		fmt.Printf("Query Joined: %v", query)
+		fmt.Printf("Query Joined: %v\n", query)
 		// Execute the query
 		_, err = tx.Exec(query, allValues...)
 		if err != nil {
@@ -52,79 +67,6 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 
 	return nil
 }
-
-
-
-//func InsertRecords(tx *sql.Tx, batch []interface{}) error {
-//	// Prepare the SQL statement with positional parameters
-//	query := `
-//		INSERT INTO SFLW_RECS (
-//			"user", dt_created, dt_submitted, ast_name, location,
-//			status, json_hash, local_id, filename, fnumber, scan_time
-//		) VALUES (
-//			$1, $2, $3, $4, $5,
-//			$6, $7, $8, $9, $10, $11
-//		)`
-//	stmt, err := tx.Prepare(query)
-//	if err != nil {
-//		return fmt.Errorf("failed to prepare statement: %w", err)
-//	}
-//	defer stmt.Close()
-//
-//	// Iterate over the batch and process each record
-//	for _, obj := range batch {
-//		// Assert the type of the item
-//		record, ok := obj.(models.Record)
-//		if !ok {
-//			return fmt.Errorf("invalid record type: %T", obj)
-//		}
-//
-//		// If FNumbers exists, insert one row per FNumber
-//		if len(record.FNumbers) > 0 {
-//			for _, fNumberEntry := range record.FNumbers {
-//				_, err := stmt.Exec(
-//					record.User,                // $1
-//					record.DateCreated,         // $2
-//					record.DateSubmitted,       // $3
-//					record.AssetName,           // $4 (nullable)
-//					record.Location,            // $5
-//					record.Status,              // $6
-//					record.JsonHash,            // $7
-//					record.LocalID,             // $8 (nullable)
-//					record.FileName,            // $9
-//					fNumberEntry.FNumber,       // $10
-//					fNumberEntry.ScanTime,      // $11
-//				)
-//				if err != nil {
-//					log.Printf("Failed to insert record with FNumber %+v: %v", fNumberEntry, err)
-//					return fmt.Errorf("failed to insert record: %w", err)
-//				}
-//			}
-//		} else {
-//			// If no FNumbers, insert a single row with empty FNumber and ScanTime
-//			_, err := stmt.Exec(
-//				record.User,          // $1
-//				record.DateCreated,   // $2
-//				record.DateSubmitted, // $3
-//				record.AssetName,     // $4 (nullable)
-//				record.Location,      // $5
-//				record.Status,        // $6
-//				record.JsonHash,      // $7
-//				record.LocalID,       // $8 (nullable)
-//				record.FileName,      // $9
-//				"",                   // $10 (empty FNumber)
-//				"",                   // $11 (empty ScanTime)
-//			)
-//			if err != nil {
-//				log.Printf("Failed to insert record without FNumber: %+v: %v", record, err)
-//				return fmt.Errorf("failed to insert record: %w", err)
-//			}
-//		}
-//	}
-//
-//	return nil
-//}
-
 
 //// InsertRecords inserts a batch of MistAMSData records into the database.
 //func InsertRecords(tx *sql.Tx, batch []interface{}) error {
@@ -172,7 +114,7 @@ func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 //	return nil
 //}
 
-func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error) {
+func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error) {
 	v := reflect.ValueOf(record)
 	t := reflect.TypeOf(record)
 
@@ -198,7 +140,7 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 
 		if field.Anonymous {
 			// Handle embedded anonymous structs
-			nestedColumns, nestedRows, nestedErr := ExtractSQLData(value.Interface())
+			nestedColumns, nestedRows, nestedErr := mp.ExtractSQLData(value.Interface())
 			if nestedErr != nil {
 				return nil, nil, nestedErr
 			}
@@ -253,11 +195,11 @@ func ExtractSQLData(record interface{}) (columns []string, rows [][]interface{},
 		rows = [][]interface{}{baseRow}
 	}
 
-	fmt.Printf("Columns: %s\n\nRows: %v\n\n", columns, rows)
+	fmt.Printf("Columns: %s\nRows: %v\n\n", columns, rows)
 	return columns, rows, nil
 }
 
-func ProcessMapResults(results []mapreduce.MapResult) error {
+func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) error {
 	// Define the Reduce function
 	// Preemptively check for errors or nil transactions
 	hasError := false

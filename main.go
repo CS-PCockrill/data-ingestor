@@ -4,16 +4,20 @@ import (
 	"data-ingestor/dbtransposer"
 	"data-ingestor/fileloader"
 	"data-ingestor/mapreduce"
-	"data-ingestor/pkg"
-	"database/sql"
 	"flag"
-	"fmt"
+	_ "github.com/godror/godror"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"log"
 )
 
 
 func main() {
+	app, err := NewApp()
+	if err != nil {
+		log.Fatalf("Error initializing application: %v", err)
+	}
+	defer app.Close()
+
 	// Define a command-line flag for the input file
 	var inputFile string
 	var modelName string
@@ -30,49 +34,18 @@ func main() {
 		return
 	}
 
+	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config}
+	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config}
+
 	// Decode the file and map records
-	records, err := fileloader.DecodeFile(inputFile, modelName)
+	records, err := fileLoader.DecodeFile(inputFile, modelName)
 	if err != nil {
 		log.Fatalf("Error decoding input file %s - %v", inputFile, err)
 		return
 	}
 
-	//var result models.Data
-	//var records []interface{}
-	//
-	//// Unmarshal the file
-	//if err := fileloader.UnmarshalFile(inputFile, &result); err != nil {
-	//	fmt.Println("Error: ", err)
-	//	return
-	//}
-
-	fmt.Printf("Processing and Mapping Records with Type: %T", records)
-	// Process and map records
-	//for _, record := range result.Records {
-	//	records = append(records, record)
-	//	// Access individual fields
-	//	fmt.Printf("User: %v | Hash: %v\n", record.User, record.JsonHash)
-	//}
-
-	// PostgreSQL connection string
-	dsn := "postgres://root:password@localhost:5432/testdb"
-
-	// Connect to the database
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		log.Fatalf("Failed to open a connection to the database: %v", err)
-	}
-	defer db.Close()
-
-	// Test the connection
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Failed to connect to the database: %v", err)
-	}
-
-	fmt.Println("Connected to PostgreSQL database successfully!")
-	db.SetMaxOpenConns(pkg.WorkerCount)
 	// Run MapReduce
-	err = mapreduce.MapReduce(records, dbtransposer.InsertRecords, dbtransposer.ProcessMapResults, db, tableName, pkg.WorkerCount)
+	err = mapreduce.MapReduce(records, dbTransposer.InsertRecords, dbTransposer.ProcessMapResults, app.DB, tableName, app.Config.Runtime.WorkerCount)
 	if err != nil {
 		log.Fatalf("MapReduce failed: %v", err)
 	} else {

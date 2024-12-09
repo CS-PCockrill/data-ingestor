@@ -1,0 +1,11 @@
+
+DATABASE:
+  DB_DRIVER: pgx
+  DB_USER: root
+  DB_PASSWORD: password
+  DB_HOSTNAME: localhost
+  DB_PORT: 5432
+  DB_NAME: testdb
+
+RUNTIME:
+  WORKER_COUNT: 2

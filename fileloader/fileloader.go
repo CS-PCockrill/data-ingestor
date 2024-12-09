@@ -1,6 +1,7 @@
 package fileloader
 
 import (
+	"data-ingestor/config"
 	"data-ingestor/models"
 	"encoding/json"
 	"encoding/xml"
@@ -11,11 +12,22 @@ import (
 	"strings"
 )
 
-func DecodeFile(filePath, modelName string) ([]interface{}, error) {
-	return createModel(modelName, filePath)
+type LoaderFunctionsInterface interface {
+	DecodeFile(filePath, modelName string) ([]interface{}, error)
+	ParseXMLConsecutiveRecords(filePath string) ([]models.Record, error)
 }
 
-func createModel(modelName string, filePath string) ([]interface{}, error) {
+type LoaderFunctions struct {
+	CONFIG *config.Config
+}
+
+var _ LoaderFunctionsInterface = (*LoaderFunctions)(nil)
+
+func (l *LoaderFunctions) DecodeFile(filePath, modelName string) ([]interface{}, error) {
+	return l.createModel(modelName, filePath)
+}
+
+func (l *LoaderFunctions) createModel(modelName string, filePath string) ([]interface{}, error) {
 	// Detect file type (JSON or XML)
 	fileType, err := detectFileType(filePath)
 	if err != nil {
@@ -40,7 +52,7 @@ func createModel(modelName string, filePath string) ([]interface{}, error) {
 	case "Record":
 		if fileType == "xml" {
 			// Parse consecutive <Record> elements (XML only)
-			rawRecords, err := ParseXMLConsecutiveRecords(filePath)
+			rawRecords, err := l.ParseXMLConsecutiveRecords(filePath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse consecutive records: %w", err)
 			}
@@ -94,7 +106,7 @@ func unmarshalFile(filePath, fileType string, v interface{}) error {
 }
 
 // ParseXMLConsecutiveRecords Parses consecutive <Record> elements in an XML file
-func ParseXMLConsecutiveRecords(filePath string) ([]models.Record, error) {
+func (l *LoaderFunctions) ParseXMLConsecutiveRecords(filePath string) ([]models.Record, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)

@@ -61,7 +61,7 @@ func main() {
 	//}
 
 	// Channel to stream records
-	recordChan := make(chan interface{}, app.Config.Runtime.WorkerCount)
+	recordChan := make(chan interface{}, 1000) // Adjust the buffer size to handle more records
 
 	// Start streaming the file into the record channel
 	go func() {

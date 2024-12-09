@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 )
 
 type LoaderFunctionsInterface interface {
@@ -97,6 +98,7 @@ func StreamXMLFile(filePath string, recordChan chan interface{}, modelName strin
 			if err := decoder.DecodeElement(&record, &se); err != nil {
 				return fmt.Errorf("failed to decode XML record: %w", err)
 			}
+			time.Sleep(1*time.Second)
 			recordChan <- record
 		}
 	}

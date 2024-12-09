@@ -2,7 +2,6 @@ package dbtransposer
 
 import (
 	"data-ingestor/config"
-	"data-ingestor/fileloader"
 	"data-ingestor/mapreduce"
 	"database/sql"
 	"fmt"
@@ -51,6 +50,7 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 		var allValues []interface{}
 		placeholderIndex := 1
 
+		mp.Logger.Info("Rows in query", zap.Any("Rows", rows))
 		for _, row := range rows {
 			rowPlaceholders := []string{}
 			for range row {
@@ -59,6 +59,8 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 			}
 			allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
 			allValues = append(allValues, row...)
+			mp.Logger.Info("All Placeholders in query", zap.Any("Holders", allPlaceholders))
+
 		}
 
 		// Combine the query with placeholders
@@ -233,49 +235,6 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 //	}
 //	return nil
 //}
-
-// MapReduceStreaming orchestrates the map and reduce phases with streaming
-func MapReduceStreaming(
-	logger *zap.Logger,
-	tx *sql.Tx,
-	filePath string,
-	mapFunc func(tx *sql.Tx, record interface{}) error,
-	reduceFunc func() error,
-) error {
-	recordChan := make(chan interface{})
-	errChan := make(chan error)
-
-	// Start streaming records
-	go func() {
-		if err := fileloader.StreamFile(filePath, recordChan); err != nil {
-			errChan <- err
-			close(errChan)
-			return
-		}
-		close(errChan)
-	}()
-
-	// Map phase: Process records as they stream
-	for record := range recordChan {
-		if err := mapFunc(tx, record); err != nil {
-			logger.Error("Error processing record", zap.Any("record", record), zap.Error(err))
-			return fmt.Errorf("map phase error: %w", err)
-		}
-	}
-
-	// Check for streaming errors
-	if err := <-errChan; err != nil {
-		return fmt.Errorf("file streaming error: %w", err)
-	}
-
-	// Reduce phase: Final aggregation or cleanup
-	if err := reduceFunc(); err != nil {
-		return fmt.Errorf("reduce phase error: %w", err)
-	}
-
-	logger.Info("MapReduce completed successfully")
-	return nil
-}
 
 func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) error {
 	// Define the Reduce function

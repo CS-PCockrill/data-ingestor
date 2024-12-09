@@ -32,7 +32,7 @@ func main() {
 	var tableName string
 
 	// Command-line flags
-	flag.StringVar(&inputFile, "file", "", "Path to the input file (JSON or XML)")
+	flag.StringVar(&inputFile, "file", "", "Path to the input file (.json or .xml)")
 	flag.StringVar(&modelName, "model", "", "Target model type (e.g., 'MistAMS')")
 	flag.StringVar(&tableName, "table", "", "Database table name for inserts (e.g., SFLW_RECS)")
 	flag.Parse()

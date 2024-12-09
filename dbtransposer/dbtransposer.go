@@ -238,27 +238,45 @@ func ProcessMapResults(results []mapreduce.MapResult) error {
 }
 
 func extractSQLData(record interface{}) (columns []string, placeholders []string, values []interface{}, err error) {
-	val := reflect.ValueOf(record)
-	if val.Kind() != reflect.Struct {
-		return nil, nil, nil, fmt.Errorf("expected struct type but got %T", record)
+	v := reflect.ValueOf(record)
+	t := reflect.TypeOf(record)
+
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+		t = t.Elem()
 	}
 
-	typ := val.Type()
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		fmt.Printf("Value in Extract - %v", field)
+	if v.Kind() != reflect.Struct {
+		return nil, nil, nil, fmt.Errorf("expected a struct but got %s", v.Kind())
+	}
 
-		tag := field.Tag.Get("db")
-		if tag == "" || tag == "-" {
-			continue // Skip fields without "db" tags or explicitly ignored
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		value := v.Field(i)
+
+		// Check for DB tags
+		dbTag := field.Tag.Get("db")
+		if dbTag == "" || dbTag == "-" {
+			// Skip fields without a "db" tag or explicitly ignored
+			continue
 		}
 
-
-		columns = append(columns, tag)
-		placeholders = append(placeholders, "?")
-		values = append(values, val.Field(i).Interface())
+		if field.Anonymous {
+			// Handle embedded structs (anonymous fields)
+			nestedColumns, nestedPlaceholders, nestedValues, nestedErr := extractSQLData(value.Interface())
+			if nestedErr != nil {
+				return nil, nil, nil, fmt.Errorf("failed to extract nested struct data: %w", nestedErr)
+			}
+			columns = append(columns, nestedColumns...)
+			placeholders = append(placeholders, nestedPlaceholders...)
+			values = append(values, nestedValues...)
+		} else {
+			// Add field data to columns, placeholders, and values
+			columns = append(columns, dbTag)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(values)+1))
+			values = append(values, value.Interface())
+		}
 	}
 
 	return columns, placeholders, values, nil
 }
-

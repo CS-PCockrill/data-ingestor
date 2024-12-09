@@ -33,5 +33,5 @@ type Data struct {
 // Record represents a single record in the XML
 type Record struct {
 	XMLName     xml.Name    `xml:"Record"`
-	MistAMSData `xml:",inline"` // Inline fields from MistAMSData into the <Record> element
+	MistAMSData `json:",inline" xml:",inline"` // Inline fields from MistAMSData into the <Record> element
 }

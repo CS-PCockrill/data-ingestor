@@ -11,45 +11,28 @@ import (
 
 func InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
 	for _, obj := range batch {
-		// Extract SQL data
-		columns, _, rows, err := ExtractSQLData(obj)
+		columns, placeholders, rows, err := ExtractSQLData(obj)
 		if err != nil {
 			return fmt.Errorf("failed to extract SQL data: %w", err)
 		}
 
-		// Dynamically build the INSERT query
-		placeholderIndex := 1
-		var placeholders []string
-		var values []interface{}
-
-		for _, row := range rows {
-			rowPlaceholders := make([]string, len(row))
-			for i := range row {
-				rowPlaceholders[i] = fmt.Sprintf("$%d", placeholderIndex)
-				placeholderIndex++
-			}
-			placeholders = append(placeholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
-			values = append(values, row...)
-		}
-
 		query := fmt.Sprintf(
-			`INSERT INTO %s (%s) VALUES %s`,
+			`INSERT INTO %s (%s) VALUES (%s)`,
 			tableName,
 			strings.Join(columns, ", "),
 			strings.Join(placeholders, ", "),
 		)
 
-		fmt.Printf("Executing query - %v\n", query)
-		// Execute the multi-row INSERT
-		_, err = tx.Exec(query, values...)
-		if err != nil {
-			return fmt.Errorf("failed to execute multi-row insert: %w", err)
+		for _, row := range rows {
+			_, err := tx.Exec(query, row...)
+			if err != nil {
+				return fmt.Errorf("failed to insert row: %w", err)
+			}
 		}
 	}
 
 	return nil
 }
-
 
 //func InsertRecords(tx *sql.Tx, batch []interface{}) error {
 //	// Prepare the SQL statement with positional parameters

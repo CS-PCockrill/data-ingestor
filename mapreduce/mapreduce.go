@@ -29,17 +29,28 @@ type ReduceFunc func(results []MapResult) error
 // worker processes tasks from the taskChan and sends results to resultChan.
 func worker(taskChan <-chan interface{}, resultChan chan<- MapResult, mapFunc MapFunc, db *sql.DB, tableName string, batchID int, wg *sync.WaitGroup) {
 	defer wg.Done()
-	for batch := range taskChan {
-		tx, err := db.Begin() // Start a transaction
-		if err != nil {
-			resultChan <- MapResult{BatchID: batchID, Err: err, Tx: nil}
-			continue
-		}
+	tx, err := db.Begin() // Start a transaction
+	if err != nil {
+		resultChan <- MapResult{BatchID: batchID, Err: err, Tx: nil}
+		return
+	}
 
+	defer func() {
+		if err != nil {
+			// If an error occurred, rollback the transaction
+			resultChan <- MapResult{BatchID: batchID, Err: err, Tx: tx}
+		} else {
+			// If no errors, commit the transaction
+			resultChan <- MapResult{BatchID: batchID, Err: nil, Tx: tx}
+		}
+	}()
+
+	for batch := range taskChan {
 		// Execute the Map function within the transaction
 		err = mapFunc(tx, tableName, batch)
-		resultChan <- MapResult{BatchID: batchID, Err: err, Tx: tx}
 	}
+	resultChan <- MapResult{BatchID: batchID, Err: err, Tx: tx}
+
 }
 
 // MapReduce orchestrates the Map and Reduce phases.

@@ -14,7 +14,7 @@ import (
 
 type TransposerFunctionsInterface interface {
 	// InsertRecords Map function paired with ExtractSQLData
-	InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error
+	InsertRecords(tx *sql.Tx, tableName string, batch interface{}) error
 	ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error)
 
 	// ProcessMapResults is the Reducer function
@@ -28,8 +28,9 @@ type TransposerFunctions struct {
 
 var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
 
-func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, batch []interface{}) error {
-	for _, obj := range batch {
+func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj interface{}) error {
+	//for obj := range batch {
+		mp.Logger.Info("Received object in InsertRecords", zap.Any("record", obj))
 		columns, rows, err := mp.ExtractSQLData(obj)
 		if err != nil {
 			mp.Logger.Error("Failed to extract SQL data",
@@ -78,7 +79,7 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, batch
 		mp.Logger.Info("Successfully executed SQL query",
 			zap.String("query", query),
 			zap.Any("record", obj)) // Log the full object
-	}
+	//}
 
 	return nil
 }

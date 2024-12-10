@@ -227,8 +227,15 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 				if err != nil {
 					return nil, err
 				}
-				for k, v := range nested {
-					flatRecord[k] = v // Flatten the nested fields directly into the record
+				// Handle repeated elements by storing them as slices
+				if existing, exists := flatRecord[t.Name.Local]; exists {
+					if slice, ok := existing.([]map[string]interface{}); ok {
+						flatRecord[t.Name.Local] = append(slice, nested)
+					} else {
+						flatRecord[t.Name.Local] = []map[string]interface{}{existing.(map[string]interface{}), nested}
+					}
+				} else {
+					flatRecord[t.Name.Local] = nested
 				}
 
 			case xml.CharData:
@@ -254,7 +261,7 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
 	}
 
-	// Handle nested repeated elements
+	// Handle nested repeated elements like `fnumbers`
 	if fnumbers, exists := record["fnumbers"]; exists {
 		// Check if `fnumbers` is a slice and flatten it
 		if fnumbersSlice, ok := fnumbers.([]map[string]interface{}); ok {
@@ -306,6 +313,202 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 
 	return nestedRecords, nil
 }
+
+//func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
+//	var nestedRecords []map[string]interface{}
+//
+//	// Recursive function to parse nested XML elements
+//	var parseElement func(start xml.StartElement) (map[string]interface{}, error)
+//	parseElement = func(start xml.StartElement) (map[string]interface{}, error) {
+//		flatRecord := make(map[string]interface{})
+//		currentKey := start.Name.Local // Current element name
+//
+//		for {
+//			token, err := decoder.Token()
+//			if err == io.EOF {
+//				break
+//			}
+//			if err != nil {
+//				return nil, fmt.Errorf("error reading token: %w", err)
+//			}
+//
+//			switch t := token.(type) {
+//			case xml.StartElement:
+//				// Recursively parse nested elements
+//				nested, err := parseElement(t)
+//				if err != nil {
+//					return nil, err
+//				}
+//				for k, v := range nested {
+//					flatRecord[k] = v // Flatten the nested fields directly into the record
+//				}
+//
+//			case xml.CharData:
+//				// Store character data as the value for the current element
+//				content := strings.TrimSpace(string(t))
+//				if content != "" {
+//					flatRecord[currentKey] = content
+//				}
+//
+//			case xml.EndElement:
+//				// Break out when the current element ends
+//				if t.Name.Local == currentKey {
+//					return flatRecord, nil
+//				}
+//			}
+//		}
+//		return flatRecord, nil
+//	}
+//
+//	// Parse the starting <Record> element
+//	record, err := parseElement(start)
+//	if err != nil {
+//		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
+//	}
+//
+//	// Handle nested repeated elements
+//	if fnumbers, exists := record["fnumbers"]; exists {
+//		// Check if `fnumbers` is a slice and flatten it
+//		if fnumbersSlice, ok := fnumbers.([]map[string]interface{}); ok {
+//			for _, nested := range fnumbersSlice {
+//				flattened := make(map[string]interface{})
+//				// Combine base fields with nested fields
+//				for k, v := range record {
+//					if k != "fnumbers" { // Skip the repeated element field itself
+//						flattened[k] = v
+//					}
+//				}
+//				for k, v := range nested {
+//					flattened[k] = v
+//				}
+//				nestedRecords = append(nestedRecords, flattened)
+//			}
+//		} else if singleFnumbers, ok := fnumbers.(map[string]interface{}); ok {
+//			// Handle single `fnumbers` element
+//			flattened := make(map[string]interface{})
+//			for k, v := range record {
+//				if k != "fnumbers" {
+//					flattened[k] = v
+//				}
+//			}
+//			for k, v := range singleFnumbers {
+//				flattened[k] = v
+//			}
+//			nestedRecords = append(nestedRecords, flattened)
+//		}
+//	} else {
+//		// Add the base record as-is if no repeated elements are found
+//		nestedRecords = append(nestedRecords, record)
+//	}
+//
+//	// Ensure keys are flat (remove nested maps)
+//	for i, record := range nestedRecords {
+//		flat := make(map[string]interface{})
+//		for k, v := range record {
+//			if nestedMap, ok := v.(map[string]interface{}); ok {
+//				for nestedKey, nestedValue := range nestedMap {
+//					flat[nestedKey] = nestedValue // Flatten nested map into parent map
+//				}
+//			} else {
+//				flat[k] = v // Retain non-nested fields as-is
+//			}
+//		}
+//		nestedRecords[i] = flat
+//	}
+//
+//	return nestedRecords, nil
+//}
+
+//func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
+//	var nestedRecords []map[string]interface{}
+//
+//	// Recursive function to parse nested XML elements
+//	var parseElement func(start xml.StartElement) (map[string]interface{}, error)
+//	parseElement = func(start xml.StartElement) (map[string]interface{}, error) {
+//		flatRecord := make(map[string]interface{})
+//		currentKey := start.Name.Local // Current element name
+//
+//		for {
+//			token, err := decoder.Token()
+//			if err == io.EOF {
+//				break
+//			}
+//			if err != nil {
+//				return nil, fmt.Errorf("error reading token: %w", err)
+//			}
+//
+//			switch t := token.(type) {
+//			case xml.StartElement:
+//				// Recursively parse nested elements
+//				nested, err := parseElement(t)
+//				if err != nil {
+//					return nil, err
+//				}
+//				// Merge nested map directly into the flat record
+//				for k, v := range nested {
+//					flatRecord[k] = v
+//				}
+//
+//			case xml.CharData:
+//				// Store character data as the value for the current element
+//				content := strings.TrimSpace(string(t))
+//				if content != "" {
+//					flatRecord[currentKey] = content
+//				}
+//
+//			case xml.EndElement:
+//				// Break out when the current element ends
+//				if t.Name.Local == currentKey {
+//					return flatRecord, nil
+//				}
+//			}
+//		}
+//		return flatRecord, nil
+//	}
+//
+//	// Parse the starting <Record> element
+//	record, err := parseElement(start)
+//	if err != nil {
+//		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
+//	}
+//
+//	// Handle nested repeated elements
+//	if fnumbers, exists := record["fnumbers"]; exists {
+//		// Check if `fnumbers` is a slice and flatten it
+//		if fnumbersSlice, ok := fnumbers.([]map[string]interface{}); ok {
+//			for _, nested := range fnumbersSlice {
+//				flattened := make(map[string]interface{})
+//				// Combine base fields with nested fields
+//				for k, v := range record {
+//					if k != "fnumbers" { // Skip the repeated element field itself
+//						flattened[k] = v
+//					}
+//				}
+//				for k, v := range nested {
+//					flattened[k] = v
+//				}
+//				nestedRecords = append(nestedRecords, flattened)
+//			}
+//		} else if singleFnumbers, ok := fnumbers.(map[string]interface{}); ok {
+//			// Handle single `fnumbers` element
+//			flattened := make(map[string]interface{})
+//			for k, v := range record {
+//				if k != "fnumbers" {
+//					flattened[k] = v
+//				}
+//			}
+//			for k, v := range singleFnumbers {
+//				flattened[k] = v
+//			}
+//			nestedRecords = append(nestedRecords, flattened)
+//		}
+//	} else {
+//		// Add the base record as-is if no repeated elements are found
+//		nestedRecords = append(nestedRecords, record)
+//	}
+//
+//	return nestedRecords, nil
+//}
 
 
 

@@ -79,7 +79,7 @@ func (l *LoaderFunctions) StreamDecodeFile(filePath string, recordChan chan inte
 	case "json":
 		return l.StreamJSONFile(filePath, recordChan, modelName)
 	case "xml":
-		return l.StreamXMLFileWithSchema(filePath, recordChan, modelName)
+		return l.StreamXMLFile(filePath, recordChan, modelName)
 	default:
 		// Log and return the error for unsupported file types
 		l.Logger.Error("Unsupported file type", zap.String("filePath", filePath), zap.String("fileType", fileType))
@@ -464,30 +464,30 @@ func (l *LoaderFunctions) detectFileType(filePath string) (string, error) {
 //
 // Returns:
 //   - An error if file opening or streaming fails.
-func (l *LoaderFunctions) StreamFile(filePath string, recordChan chan interface{}) error {
-	l.Logger.Info("Starting file streaming", zap.String("filePath", filePath))
-
-	// Detect the file type (XML or JSON)
-	fileType, _ := l.detectFileType(filePath)
-	file, err := os.Open(filePath)
-	if err != nil {
-		l.Logger.Error("Failed to open file", zap.String("filePath", filePath), zap.Error(err))
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-
-	// Dispatch to the appropriate streaming method based on file type
-	switch fileType {
-	case "xml":
-		l.Logger.Info("Detected XML file type", zap.String("filePath", filePath))
-		return l.streamXML(file, recordChan)
-	case "json":
-		l.Logger.Info("Detected JSON file type", zap.String("filePath", filePath))
-		return l.streamJSON(file, recordChan)
-	default:
-		l.Logger.Error("Unsupported file type", zap.String("fileType", fileType))
-		return fmt.Errorf("unsupported file type: %s", fileType)
-	}
-}
+//func (l *LoaderFunctions) StreamFile(filePath string, recordChan chan interface{}) error {
+//	l.Logger.Info("Starting file streaming", zap.String("filePath", filePath))
+//
+//	// Detect the file type (XML or JSON)
+//	fileType, _ := l.detectFileType(filePath)
+//	file, err := os.Open(filePath)
+//	if err != nil {
+//		l.Logger.Error("Failed to open file", zap.String("filePath", filePath), zap.Error(err))
+//		return fmt.Errorf("failed to open file: %w", err)
+//	}
+//
+//	// Dispatch to the appropriate streaming method based on file type
+//	switch fileType {
+//	case "xml":
+//		l.Logger.Info("Detected XML file type", zap.String("filePath", filePath))
+//		return l.streamXML(file, recordChan)
+//	case "json":
+//		l.Logger.Info("Detected JSON file type", zap.String("filePath", filePath))
+//		return l.streamJSON(file, recordChan)
+//	default:
+//		l.Logger.Error("Unsupported file type", zap.String("fileType", fileType))
+//		return fmt.Errorf("unsupported file type: %s", fileType)
+//	}
+//}
 
 // streamXML streams records from an XML file into the provided channel.
 //
@@ -497,33 +497,33 @@ func (l *LoaderFunctions) StreamFile(filePath string, recordChan chan interface{
 //
 // Returns:
 //   - An error if XML parsing fails.
-func (l *LoaderFunctions) streamXML(file *os.File, recordChan chan interface{}) error {
-	decoder := xml.NewDecoder(file)
-	for {
-		// Read the next token from the XML
-		token, err := decoder.Token()
-		if err != nil {
-			if err == io.EOF {
-				l.Logger.Info("Completed streaming XML file")
-				close(recordChan) // Close the channel on EOF
-				return nil
-			}
-			l.Logger.Error("Error reading XML token", zap.Error(err))
-			return fmt.Errorf("error reading XML token: %w", err)
-		}
-
-		// Check if the token is a start element named "Record"
-		if startElement, ok := token.(xml.StartElement); ok && startElement.Name.Local == "Record" {
-			var record models.Record // Replace with your record type
-			if err := decoder.DecodeElement(&record, &startElement); err != nil {
-				l.Logger.Error("Error decoding XML record", zap.Error(err))
-				return fmt.Errorf("error decoding record: %w", err)
-			}
-			l.Logger.Debug("Streaming XML record", zap.Any("record", record))
-			recordChan <- record
-		}
-	}
-}
+//func (l *LoaderFunctions) streamXML(file *os.File, recordChan chan interface{}) error {
+//	decoder := xml.NewDecoder(file)
+//	for {
+//		// Read the next token from the XML
+//		token, err := decoder.Token()
+//		if err != nil {
+//			if err == io.EOF {
+//				l.Logger.Info("Completed streaming XML file")
+//				close(recordChan) // Close the channel on EOF
+//				return nil
+//			}
+//			l.Logger.Error("Error reading XML token", zap.Error(err))
+//			return fmt.Errorf("error reading XML token: %w", err)
+//		}
+//
+//		// Check if the token is a start element named "Record"
+//		if startElement, ok := token.(xml.StartElement); ok && startElement.Name.Local == "Record" {
+//			var record models.Record // Replace with your record type
+//			if err := decoder.DecodeElement(&record, &startElement); err != nil {
+//				l.Logger.Error("Error decoding XML record", zap.Error(err))
+//				return fmt.Errorf("error decoding record: %w", err)
+//			}
+//			l.Logger.Debug("Streaming XML record", zap.Any("record", record))
+//			recordChan <- record
+//		}
+//	}
+//}
 
 // streamJSON streams records from a JSON file into the provided channel.
 //
@@ -533,34 +533,34 @@ func (l *LoaderFunctions) streamXML(file *os.File, recordChan chan interface{}) 
 //
 // Returns:
 //   - An error if JSON parsing fails.
-func (l *LoaderFunctions) streamJSON(file *os.File, recordChan chan interface{}) error {
-	decoder := json.NewDecoder(file)
-
-	// Ensure the top-level JSON element is an array
-	tok, err := decoder.Token()
-	if err != nil {
-		l.Logger.Error("Error reading JSON token", zap.Error(err))
-		return fmt.Errorf("error reading JSON token: %w", err)
-	}
-	if tok != json.Delim('[') {
-		l.Logger.Error("Invalid JSON structure; expected array", zap.Any("token", tok))
-		return fmt.Errorf("expected JSON array, got %v", tok)
-	}
-
-	// Stream each element of the JSON array
-	for decoder.More() {
-		var record models.Record // Replace with your record type
-		if err := decoder.Decode(&record); err != nil {
-			l.Logger.Error("Error decoding JSON record", zap.Error(err))
-			return fmt.Errorf("error decoding record: %w", err)
-		}
-		l.Logger.Debug("Streaming JSON record", zap.Any("record", record))
-		recordChan <- record
-	}
-	close(recordChan) // Close the channel when done
-	l.Logger.Info("Completed streaming JSON file")
-	return nil
-}
+//func (l *LoaderFunctions) streamJSON(file *os.File, recordChan chan interface{}) error {
+//	decoder := json.NewDecoder(file)
+//
+//	// Ensure the top-level JSON element is an array
+//	tok, err := decoder.Token()
+//	if err != nil {
+//		l.Logger.Error("Error reading JSON token", zap.Error(err))
+//		return fmt.Errorf("error reading JSON token: %w", err)
+//	}
+//	if tok != json.Delim('[') {
+//		l.Logger.Error("Invalid JSON structure; expected array", zap.Any("token", tok))
+//		return fmt.Errorf("expected JSON array, got %v", tok)
+//	}
+//
+//	// Stream each element of the JSON array
+//	for decoder.More() {
+//		var record models.Record // Replace with your record type
+//		if err := decoder.Decode(&record); err != nil {
+//			l.Logger.Error("Error decoding JSON record", zap.Error(err))
+//			return fmt.Errorf("error decoding record: %w", err)
+//		}
+//		l.Logger.Debug("Streaming JSON record", zap.Any("record", record))
+//		recordChan <- record
+//	}
+//	close(recordChan) // Close the channel when done
+//	l.Logger.Info("Completed streaming JSON file")
+//	return nil
+//}
 
 // ParseXMLElement dynamically parses an XML element into a map.
 func ParseXMLElement(decoder *xml.Decoder) (map[string]interface{}, error) {

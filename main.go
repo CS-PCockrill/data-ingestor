@@ -74,7 +74,7 @@ func main() {
 	//}
 
 	// Channel to stream records
-	recordChan := make(chan interface{}, 1000) // Adjust the buffer size to handle more records
+	recordChan := make(chan map[string]interface{}, 1000) // Adjust the buffer size to handle more records
 
 	// Start streaming the file into the record channel
 	go func() {
@@ -91,13 +91,13 @@ func main() {
 
 	// Run Stream MapReduce
 	err = mapreduce.MapReduceStreaming(
-		func(stream chan interface{}) error { // Stream function for MapReduce
+		func(stream chan map[string]interface{}) error { // Stream function for MapReduce
 			for record := range recordChan {
 				stream <- record
 			}
 			return nil
 		},
-		dbTransposer.InsertRecords,
+		dbTransposer.InsertRecordsUsingSchema,
 		dbTransposer.ProcessMapResults,
 		app.DB,
 		tableName,

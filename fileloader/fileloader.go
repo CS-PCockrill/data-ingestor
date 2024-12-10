@@ -15,7 +15,7 @@ import (
 
 type LoaderFunctionsInterface interface {
 	DecodeFile(filePath, modelName string) ([]interface{}, error)
-	StreamDecodeFile(filePath string, recordChan chan interface{}, modelName string) error
+	StreamDecodeFile(filePath string, recordChan chan map[string]interface{}, modelName string) error
 
 }
 
@@ -65,7 +65,7 @@ func (l *LoaderFunctions) DecodeFile(filePath, modelName string) ([]interface{},
 //
 // Returns:
 // - An error if streaming or file processing fails.
-func (l *LoaderFunctions) StreamDecodeFile(filePath string, recordChan chan interface{}, modelName string) error {
+func (l *LoaderFunctions) StreamDecodeFile(filePath string, recordChan chan map[string]interface{}, modelName string) error {
 	// Log the start of the streaming process
 	l.Logger.Info("Starting file streaming", zap.String("filePath", filePath), zap.String("modelName", modelName))
 
@@ -80,9 +80,9 @@ func (l *LoaderFunctions) StreamDecodeFile(filePath string, recordChan chan inte
 	// Process the file based on its type
 	switch fileType {
 	case "json":
-		return l.StreamJSONFile(filePath, recordChan, modelName)
+		return l.StreamJSONFileWithSchema(filePath, recordChan)
 	case "xml":
-		return l.StreamXMLFile(filePath, recordChan, modelName)
+		return l.StreamXMLFileWithSchema(filePath, recordChan, modelName)
 	default:
 		// Log and return the error for unsupported file types
 		l.Logger.Error("Unsupported file type", zap.String("filePath", filePath), zap.String("fileType", fileType))
@@ -199,7 +199,7 @@ func (l *LoaderFunctions) StreamXMLFile(filePath string, recordChan chan interfa
 	return nil
 }
 
-func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan chan interface{}) error {
+func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan chan map[string]interface{}) error {
 	// Log the start of JSON streaming
 	l.Logger.Info("Streaming JSON file", zap.String("filePath", filePath))
 
@@ -227,7 +227,7 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 	return nil
 }
 
-func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan chan interface{}, modelName string) error {
+func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan chan map[string]interface{}, modelName string) error {
 	l.Logger.Info("Streaming XML file", zap.String("filePath", filePath))
 
 	file, err := os.Open(filePath)

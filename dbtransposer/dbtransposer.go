@@ -185,8 +185,9 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 					}
 
 					// Find the index of the slice field in the column list
+					mp.Logger.Info("Setting Slice Elements in Indices", zap.Any("columns", columns))
 					for colIdx, colName := range columns {
-						if colName == fmt.Sprintf(`"%s"`, sliceDBTag) {
+						if colName == fmt.Sprintf("%s", sliceDBTag) {
 							row[colIdx] = elementValue.Field(k).Interface()
 							break
 						}

@@ -132,7 +132,7 @@ func (mp *TransposerFunctions) InsertRecordsUsingSchema(tx *sql.Tx, tableName st
 	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
 
 	// Extract SQL columns and rows from the object using ExtractSQLData
-	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj, "")
+	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj, "Record")
 	if err != nil {
 		// Log and return an error if data extraction fails
 		mp.Logger.Error("Failed to extract SQL data",
@@ -380,7 +380,7 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 //   - error: An error, if any issues occur during processing.
 func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]interface{}, modelName string) ([]string, [][]interface{}, error) {
 	// Retrieve the key-column mapping for the given model
-	columnMapping, exists := mp.KeyColumnMapping["Record"]
+	columnMapping, exists := mp.KeyColumnMapping[modelName]
 	if !exists {
 		mp.Logger.Error("No key-column mapping found for model", zap.String("modelName", modelName))
 		return nil, nil, fmt.Errorf("no key-column mapping found for model %s", modelName)

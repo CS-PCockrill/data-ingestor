@@ -22,6 +22,7 @@ type TransposerFunctionsInterface interface {
 type TransposerFunctions struct {
 	CONFIG *config.Config
 	Logger *zap.Logger
+	KeyColumnMapping map[string]map[string]string // Map for key-column mappings
 }
 
 var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
@@ -288,51 +289,45 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 //   - columns: A list of column names defined by the schema.
 //   - rows: A 2D slice of values for SQL insertion.
 //   - error: An error, if any issues occur during processing.
-func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record interface{}) ([]string, [][]interface{}, error) {
-	// Convert record to reflect.Value for processing
-	v := reflect.ValueOf(record)
-
-	// Ensure the input is a map for generic handling
-	if v.Kind() != reflect.Map {
-		mp.Logger.Error("Object is not a map", zap.Any("object_type", v.Kind()))
-		return nil, nil, fmt.Errorf("expected a map but got %s", v.Kind())
+func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]interface{}, modelName string) ([]string, [][]interface{}, error) {
+	// Retrieve the key-column mapping for the given model
+	columnMapping, exists := mp.KeyColumnMapping[modelName]
+	if !exists {
+		mp.Logger.Error("No key-column mapping found for model", zap.String("modelName", modelName))
+		return nil, nil, fmt.Errorf("no key-column mapping found for model %s", modelName)
 	}
 
+	// Initialize columns and rows
 	columns := []string{}
-	rows := [][]interface{}{{}} // Start with an empty row for appending values
+	rows := [][]interface{}{}
 
-	// Iterate over map keys
-	for _, key := range v.MapKeys() {
-		fieldName := key.String() // Convert the map key to a string
-		value := v.MapIndex(key)  // Get the value for the key
-
-		// Add the field name as a column
-		columns = append(columns, fmt.Sprintf(`"%s"`, fieldName))
-
-		// Check if the value is a slice/array
-		if value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
-			var flattenedRows [][]interface{}
-			for i := 0; i < value.Len(); i++ {
-				element := value.Index(i).Interface()
-
-				// Copy existing rows and append slice element values
-				for _, row := range rows {
-					newRow := append(append([]interface{}{}, row...), element)
-					flattenedRows = append(flattenedRows, newRow)
-				}
-			}
-			rows = flattenedRows
-		} else {
-			// Add value to each existing row
-			for i := range rows {
-				rows[i] = append(rows[i], value.Interface())
-			}
+	// Flatten the record into columns and values
+	row := []interface{}{}
+	for key, value := range record {
+		// Get the corresponding column name
+		column, ok := columnMapping[key]
+		if !ok {
+			mp.Logger.Warn("Skipping unmapped key", zap.String("key", key))
+			continue // Skip keys that don't have a mapping
 		}
+
+		// Append the column name and value
+		columns = append(columns, fmt.Sprintf(`"%s"`, column))
+		row = append(row, value)
 	}
 
-	mp.Logger.Info("Extracted SQL data", zap.Any("columns", columns), zap.Any("rows", rows))
+	// Add the row to rows
+	rows = append(rows, row)
+
+	// Log the extracted data
+	mp.Logger.Info("Extracted SQL data",
+		zap.Strings("Columns", columns),
+		zap.Any("Rows", rows),
+	)
+
 	return columns, rows, nil
 }
+
 
 
 

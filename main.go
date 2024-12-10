@@ -6,17 +6,21 @@ import (
 	"data-ingestor/fileloader"
 	"data-ingestor/mapreduce"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"go.uber.org/zap"
 	"log"
+	"os"
 )
 
 type App struct {
 	Config    *config.Config
 	Logger    *zap.Logger
 	DB 		  *sql.DB
+	KeyColumnMapping map[string]map[string]string // Map for key-column mappings
+
 }
 
 func main() {
@@ -25,9 +29,6 @@ func main() {
 		log.Fatalf("Error initializing application: %v", err)
 	}
 	defer app.Close()
-
-	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config, Logger: app.Logger}
-	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger}
 
 	// Define a command-line flag for the input file
 	var inputFile string
@@ -46,6 +47,16 @@ func main() {
 			zap.Any("Usage", "go run main.go -file test-loader.xml -model MistAMS -table SFLW_RECS"))
 		return
 	}
+
+	keyColumnMapping, err := LoadKeyColumnMapping("data-schema.json")
+	if err != nil {
+		app.Logger.Fatal("Loading Key Column Mapping Failed", zap.Error(err))
+		return
+	}
+	app.KeyColumnMapping = keyColumnMapping
+
+	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config, Logger: app.Logger, KeyColumnMapping: keyColumnMapping}
+	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger, KeyColumnMapping: keyColumnMapping}
 
 	// Decode the file and map records
 	//records, err := fileLoader.DecodeFile(inputFile, modelName)
@@ -139,4 +150,20 @@ func NewApp() (*App, error) {
 func (app *App) Close() {
 	app.Logger.Sync()
 	app.DB.Close()
+}
+
+// LoadKeyColumnMapping loads a JSON file and parses it into a map.
+func LoadKeyColumnMapping(filePath string) (map[string]map[string]string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open key-column mapping file: %w", err)
+	}
+
+	var mapping map[string]map[string]string
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&mapping); err != nil {
+		return nil, fmt.Errorf("failed to decode key-column mapping JSON: %w", err)
+	}
+
+	return mapping, nil
 }

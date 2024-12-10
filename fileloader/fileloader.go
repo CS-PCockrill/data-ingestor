@@ -16,11 +16,14 @@ import (
 type LoaderFunctionsInterface interface {
 	DecodeFile(filePath, modelName string) ([]interface{}, error)
 	StreamDecodeFile(filePath string, recordChan chan interface{}, modelName string) error
+
 }
 
 type LoaderFunctions struct {
 	CONFIG *config.Config
 	Logger *zap.Logger
+	KeyColumnMapping map[string]map[string]string // Map for key-column mappings
+
 }
 
 var _ LoaderFunctionsInterface = (*LoaderFunctions)(nil)
@@ -602,5 +605,6 @@ func ParseXMLElement(decoder *xml.Decoder) (map[string]interface{}, error) {
 
 	return result, nil
 }
+
 
 

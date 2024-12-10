@@ -1,0 +1,15 @@
+{
+  "Record": {
+    "user": "user",
+    "dateCreated": "dt_created",
+    "dateSubmitted": "dt_submitted",
+    "assetName": "ast_name",
+    "location": "location",
+    "status": "status",
+    "jsonHash": "json_hash",
+    "localId": "local_id",
+    "fileName": "filename",
+    "fNumber": "fnumber",
+    "scanTime": "scan_time"
+  }
+}

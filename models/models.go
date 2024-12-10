@@ -20,8 +20,8 @@ type MistAMSData struct {
 
 // FNumbers represents the fNumber and scanTime fields
 type FNumbers struct {
-	FNumber  string `json:"fNumber" xml:"fNumber" db:"fnumber"`
-	ScanTime string `json:"scanTime" xml:"scanTime" db:"scan_time"`
+	FNumber  string `json:"fNumber" xml:"fnumber" db:"fnumber"`
+	ScanTime string `json:"scanTime" xml:"scan_time" db:"scan_time"`
 }
 
 // Data is the top-level tag in the input XML file

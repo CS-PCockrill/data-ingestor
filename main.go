@@ -165,5 +165,6 @@ func LoadKeyColumnMapping(filePath string) (map[string]map[string]string, error)
 		return nil, fmt.Errorf("failed to decode key-column mapping JSON: %w", err)
 	}
 
+	fmt.Printf("Loaded key column mapping: %v", mapping)
 	return mapping, nil
 }

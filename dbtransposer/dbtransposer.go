@@ -380,7 +380,7 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 //   - error: An error, if any issues occur during processing.
 func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]interface{}, modelName string) ([]string, [][]interface{}, error) {
 	// Retrieve the key-column mapping for the given model
-	columnMapping, exists := mp.KeyColumnMapping[modelName]
+	columnMapping, exists := mp.KeyColumnMapping["Record"]
 	if !exists {
 		mp.Logger.Error("No key-column mapping found for model", zap.String("modelName", modelName))
 		return nil, nil, fmt.Errorf("no key-column mapping found for model %s", modelName)

@@ -204,8 +204,8 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]interf
 }
 
 func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
-	//baseRecord := make(map[string]interface{}) // Holds flat fields
-	var resultRecords []map[string]interface{} // Holds the final flattened rows
+	//baseRecord := make(map[string]interface{}) // Base fields of the record
+	var resultRecords []map[string]interface{} // Final flattened records
 
 	// Recursive function to parse nested XML elements
 	var parseElement func(start xml.StartElement) (map[string]interface{}, error)
@@ -227,7 +227,8 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 				if err != nil {
 					return nil, err
 				}
-				// Handle repeated elements
+
+				// Handle repeated elements like <fnumbers>
 				if existing, exists := record[t.Name.Local]; exists {
 					if slice, ok := existing.([]map[string]interface{}); ok {
 						record[t.Name.Local] = append(slice, nested)
@@ -261,18 +262,17 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
 	}
 
-	// Handle repeated elements (e.g., <fnumbers>)
+	// Handle nested repeated elements like <fnumbers>
 	if fnumbers, exists := record["fnumbers"]; exists {
 		if fnumbersSlice, ok := fnumbers.([]map[string]interface{}); ok {
 			for _, nested := range fnumbersSlice {
 				flattened := make(map[string]interface{})
-				// Copy base fields
+				// Combine base fields with nested fields
 				for k, v := range record {
-					if k != "fnumbers" { // Exclude repeated field itself
+					if k != "fnumbers" { // Skip the repeated element itself
 						flattened[k] = v
 					}
 				}
-				// Add nested fields
 				for k, v := range nested {
 					flattened[k] = v
 				}
@@ -280,7 +280,7 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 			}
 		}
 	} else {
-		// No repeated elements, just add the base record
+		// No repeated elements, add the base record as is
 		resultRecords = append(resultRecords, record)
 	}
 

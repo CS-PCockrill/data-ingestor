@@ -177,7 +177,7 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 
 			columns = append(columns, nestedColumns...)
 			if len(nestedRows) > 0 {
-				baseRow = append(baseRow, nestedRows[0]...)
+				rows = append(rows, nestedRows...)
 			}
 		} else if value.Kind() == reflect.Slice {
 			// Handle slices: generate rows for each slice element

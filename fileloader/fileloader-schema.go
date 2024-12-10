@@ -10,7 +10,7 @@ import (
 	"io"
 	"os"
 	"github.com/xuri/excelize/v2"
-
+	"strings"
 )
 
 // StreamDecodeFileWithSchema is the streaming equivalent of DecodeFile for MapReduce.
@@ -205,8 +205,20 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]string
 }
 
 func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]string, error) {
-	baseRecord := make(map[string]string) // Base record for common fields
-	var repeatedRecords []map[string]string
+	baseRecord := make(map[string]string) // Holds flat fields
+	nestedRecords := []map[string]string{}
+
+	// Helper to create a new record by merging baseRecord and additional fields
+	mergeRecord := func(extraFields map[string]string) map[string]string {
+		newRecord := make(map[string]string)
+		for k, v := range baseRecord {
+			newRecord[k] = v
+		}
+		for k, v := range extraFields {
+			newRecord[k] = v
+		}
+		return newRecord
+	}
 
 	for {
 		token, err := decoder.Token()
@@ -219,50 +231,48 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 
 		switch t := token.(type) {
 		case xml.StartElement:
-			// Handle nested elements, including repeated elements
-			//if t.Name.Local == "fnumbers" {
-			//	// Decode a single repeated element into a map
-			//	repeatedField := make(map[string]string)
-			//	if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
-			//		return nil, fmt.Errorf("failed to decode repeated element: %w", err)
-			//	}
-			//	repeatedRecords = append(repeatedRecords, repeatedField)
-			//} else {
-				// Decode a simple field
-				var value string
-				if err := decoder.DecodeElement(&value, &t); err != nil {
-					return nil, fmt.Errorf("failed to decode element: %w", err)
-				}
-				baseRecord[t.Name.Local] = value
-			//}
+			// Handle nested elements
+			var elementData map[string]string
+			if err := decoder.DecodeElement(&elementData, &t); err != nil {
+				return nil, fmt.Errorf("failed to decode nested element: %w", err)
+			}
+
+			// If nested element is a list, treat it as a repeated record
+			if t.Name.Local == "fnumbers" {
+				nestedRecords = append(nestedRecords, elementData)
+			} else {
+				// Add flat fields to the base record
+				baseRecord[t.Name.Local] = elementData[t.Name.Local]
+			}
+
+		case xml.CharData:
+			// Add text content to the current base record
+			content := strings.TrimSpace(string(t))
+			if len(content) > 0 {
+				currentKey := start.Name.Local
+				baseRecord[currentKey] = content
+			}
 
 		case xml.EndElement:
 			if t.Name.Local == "Record" {
-				// When closing the <Record> tag, merge the base and repeated records
-				if len(repeatedRecords) > 0 {
-					var results []map[string]string
-					for _, repeatedRecord := range repeatedRecords {
-						combinedRecord := make(map[string]string)
-						// Copy base fields
-						for k, v := range baseRecord {
-							combinedRecord[k] = v
-						}
-						// Add repeated fields
-						for k, v := range repeatedRecord {
-							combinedRecord[k] = v
-						}
-						results = append(results, combinedRecord)
-					}
-					return results, nil
+				// If no nested records, return just the base record
+				if len(nestedRecords) == 0 {
+					return []map[string]string{baseRecord}, nil
 				}
-				// Return just the base record if no repeated fields
-				return []map[string]string{baseRecord}, nil
+
+				// Merge base record with each nested record
+				var results []map[string]string
+				for _, nested := range nestedRecords {
+					results = append(results, mergeRecord(nested))
+				}
+				return results, nil
 			}
 		}
 	}
 
 	return nil, errors.New("unexpected end of XML while parsing <Record>")
 }
+
 
 
 func (l *LoaderFunctions) ExportToJSON(records []map[string]string, outputPath string) error {

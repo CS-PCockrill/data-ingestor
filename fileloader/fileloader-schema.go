@@ -227,9 +227,15 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 				if err != nil {
 					return nil, err
 				}
-				// Merge nested map directly into the flat record
-				for k, v := range nested {
-					flatRecord[k] = v
+				// Handle repeated elements by storing them as slices
+				if existing, exists := flatRecord[t.Name.Local]; exists {
+					if slice, ok := existing.([]map[string]interface{}); ok {
+						flatRecord[t.Name.Local] = append(slice, nested)
+					} else {
+						flatRecord[t.Name.Local] = []map[string]interface{}{existing.(map[string]interface{}), nested}
+					}
+				} else {
+					flatRecord[t.Name.Local] = nested
 				}
 
 			case xml.CharData:
@@ -255,7 +261,7 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
 	}
 
-	// Handle nested repeated elements
+	// Handle nested repeated elements like `fnumbers`
 	if fnumbers, exists := record["fnumbers"]; exists {
 		// Check if `fnumbers` is a slice and flatten it
 		if fnumbersSlice, ok := fnumbers.([]map[string]interface{}); ok {
@@ -292,7 +298,6 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 
 	return nestedRecords, nil
 }
-
 
 
 func (l *LoaderFunctions) ExportToJSON(records []map[string]interface{}, outputPath string) error {

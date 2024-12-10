@@ -233,6 +233,7 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 		case xml.StartElement:
 			// Handle nested elements
 			var elementData map[string]string
+			fmt.Printf("Element Data: %v", t)
 			if err := decoder.DecodeElement(&elementData, &t); err != nil {
 				return nil, fmt.Errorf("failed to decode nested element: %w", err)
 			}

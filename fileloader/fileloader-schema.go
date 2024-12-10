@@ -190,7 +190,7 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]interf
 			return nil, fmt.Errorf("failed to read XML token: %w", err)
 		}
 
-		if se, ok := token.(xml.StartElement); ok {
+		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
 			// Parse and flatten the <Record> element
 			flattenedRecords, err := l.ParseAndFlattenXMLElement(decoder, se)
 			if err != nil {

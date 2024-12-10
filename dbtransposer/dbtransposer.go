@@ -45,7 +45,10 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 			strings.Join(columns, ", "),
 		)
 
-		// Add placeholders for all rows
+	mp.Logger.Info("Generated Rows", zap.Any("Rows", rows))
+
+
+	// Add placeholders for all rows
 		var allPlaceholders []string
 		var allValues []interface{}
 		placeholderIndex := 1
@@ -209,9 +212,9 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 
 	mp.Logger.Info("Rows finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))
 	// If no slices were processed, use the base row as a single entry
-	if len(rows) == 0 {
-		rows = [][]interface{}{baseRow}
-	}
+	//if len(rows) == 0 {
+	//	rows = [][]interface{}{baseRow}
+	//}
 
 	return columns, rows, nil
 }

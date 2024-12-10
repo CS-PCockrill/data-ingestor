@@ -1,12 +1,15 @@
 package fileloader
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"os"
+	"github.com/xuri/excelize/v2"
+
 )
 
 // StreamDecodeFileWithSchema is the streaming equivalent of DecodeFile for MapReduce.
@@ -167,4 +170,167 @@ func ParseXMLElementWithFlattening(decoder *xml.Decoder, start xml.StartElement)
 			}
 		}
 	}
+}
+
+func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]string, error) {
+	// Open the XML file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open XML file: %w", err)
+	}
+
+	decoder := xml.NewDecoder(file)
+	var records []map[string]string
+
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read XML token: %w", err)
+		}
+
+		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
+			flattenedRecord, err := l.ParseAndFlattenXMLElement(decoder, se)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse <Record>: %w", err)
+			}
+			records = append(records, flattenedRecord...)
+		}
+	}
+	return records, nil
+}
+
+func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]string, error) {
+	baseRecord := make(map[string]string)
+	var repeatedFields []map[string]string
+
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		switch t := token.(type) {
+		case xml.StartElement:
+			// Handle repeated elements dynamically
+			if t.Name.Local == "fnumbers" {
+				repeatedField := make(map[string]string)
+				if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
+					return nil, fmt.Errorf("failed to decode repeated element: %w", err)
+				}
+				repeatedFields = append(repeatedFields, repeatedField)
+			} else {
+				var value string
+				if err := decoder.DecodeElement(&value, &t); err != nil {
+					return nil, fmt.Errorf("failed to decode element: %w", err)
+				}
+				baseRecord[t.Name.Local] = value
+			}
+
+		case xml.EndElement:
+			if t.Name.Local == "Record" {
+				if len(repeatedFields) > 0 {
+					var results []map[string]string
+					for _, repeatedField := range repeatedFields {
+						row := make(map[string]string)
+						for k, v := range baseRecord {
+							row[k] = v
+						}
+						for k, v := range repeatedField {
+							row[k] = v
+						}
+						results = append(results, row)
+					}
+					return results, nil
+				}
+				return []map[string]string{baseRecord}, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (l *LoaderFunctions) ExportToJSON(records []map[string]string, outputPath string) error {
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create JSON file: %w", err)
+	}
+
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(records); err != nil {
+		return fmt.Errorf("failed to encode JSON: %w", err)
+	}
+	fmt.Printf("Successfully exported to JSON: %s\n", outputPath)
+	return nil
+}
+
+func (l *LoaderFunctions) ExportToCSV(records []map[string]string, outputPath string) error {
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV file: %w", err)
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write headers
+	if len(records) > 0 {
+		headers := []string{}
+		for key := range records[0] {
+			headers = append(headers, key)
+		}
+		if err := writer.Write(headers); err != nil {
+			return fmt.Errorf("failed to write CSV headers: %w", err)
+		}
+
+		// Write rows
+		for _, record := range records {
+			row := []string{}
+			for _, header := range headers {
+				row = append(row, record[header])
+			}
+			if err := writer.Write(row); err != nil {
+				return fmt.Errorf("failed to write CSV row: %w", err)
+			}
+		}
+	}
+	fmt.Printf("Successfully exported to CSV: %s\n", outputPath)
+	return nil
+}
+
+func (l *LoaderFunctions) ExportToExcel(records []map[string]string, outputPath string) error {
+	f := excelize.NewFile()
+
+	// Write headers and rows
+	sheetName := "Sheet1"
+	if len(records) > 0 {
+		headers := []string{}
+		for key := range records[0] {
+			headers = append(headers, key)
+		}
+		for colIndex, header := range headers {
+			cell, _ := excelize.CoordinatesToCellName(colIndex+1, 1)
+			f.SetCellValue(sheetName, cell, header)
+		}
+
+		// Write rows
+		for rowIndex, record := range records {
+			for colIndex, header := range headers {
+				cell, _ := excelize.CoordinatesToCellName(colIndex+1, rowIndex+2)
+				f.SetCellValue(sheetName, cell, record[header])
+			}
+		}
+	}
+
+	// Save the Excel file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+	fmt.Printf("Successfully exported to Excel: %s\n", outputPath)
+	return nil
 }

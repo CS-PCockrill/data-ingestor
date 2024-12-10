@@ -206,6 +206,7 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 		}
 	}
 
+	mp.Logger.Info("Rows finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))
 	// If no slices were processed, use the base row as a single entry
 	if len(rows) == 0 {
 		rows = [][]interface{}{baseRow}

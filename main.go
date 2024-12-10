@@ -7,20 +7,17 @@ import (
 	"data-ingestor/mapreduce"
 	"data-ingestor/util"
 	"database/sql"
-	"encoding/json"
 	"flag"
 	"fmt"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"go.uber.org/zap"
 	"log"
-	"os"
 )
 
 type App struct {
 	Config    *config.Config
 	Logger    *zap.Logger
 	DB 		  *sql.DB
-	KeyColumnMapping map[string]map[string]string // Map for key-column mappings
 
 }
 
@@ -52,15 +49,8 @@ func main() {
 		return
 	}
 
-	keyColumnMapping, err := LoadKeyColumnMapping("data-schema.json")
-	if err != nil {
-		app.Logger.Fatal("Loading Key Column Mapping Failed", zap.Error(err))
-		return
-	}
-	app.KeyColumnMapping = keyColumnMapping
-
-	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config, Logger: app.Logger, KeyColumnMapping: keyColumnMapping}
-	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger, KeyColumnMapping: keyColumnMapping}
+	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config, Logger: app.Logger}
+	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger}
 
 	// Decode the file and map records
 	//records, err := fileLoader.DecodeFile(inputFile, modelName)
@@ -145,17 +135,28 @@ func main() {
 			zap.Any("worker_count", app.Config.Runtime.WorkerCount),
 			zap.Error(err))
 		return
-	} else {
-		log.Println("Stream MapReduce completed successfully")
-		app.Logger.Info("Stream MapReduce Succeeded",
-			zap.Any("input_file", inputFile),
-			zap.Any("model_type", modelName),
-			zap.Any("table_name", tableName),
-			zap.Any("records_inserted_success", counter.GetSucceeded()),
-			zap.Any("records_inserted_error", counter.GetErrors()),
-			zap.Any("worker_count", app.Config.Runtime.WorkerCount))
 	}
 
+	log.Println("Stream MapReduce completed successfully")
+	app.Logger.Info("Stream MapReduce Succeeded",
+		zap.Any("input_file", inputFile),
+		zap.Any("model_type", modelName),
+		zap.Any("table_name", tableName),
+		zap.Any("records_inserted_success", counter.GetSucceeded()),
+		zap.Any("records_inserted_error", counter.GetErrors()),
+		zap.Any("worker_count", app.Config.Runtime.WorkerCount))
+
+	// Move input file (inputFile) to config runtime folder/directory destination
+	err = fileLoader.MoveInputFile(inputFile, app.Config.Runtime.FileDestination)
+	if err != nil {
+		app.Logger.Error("Failed to Move Input File",
+			zap.Any("input_file", inputFile),
+			zap.Any("destination", app.Config.Runtime.FileDestination),
+			zap.Any("model_type", modelName),
+			zap.Any("table_name", tableName),
+			zap.Any("worker_count", app.Config.Runtime.WorkerCount),
+			zap.Error(err))
+	}
 }
 
 // NewApp initializes the App with dependencies
@@ -185,20 +186,4 @@ func NewApp() (*App, error) {
 func (app *App) Close() {
 	app.Logger.Sync()
 	app.DB.Close()
-}
-
-// LoadKeyColumnMapping loads a JSON file and parses it into a map.
-func LoadKeyColumnMapping(filePath string) (map[string]map[string]string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open key-column mapping file: %w", err)
-	}
-
-	var mapping map[string]map[string]string
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&mapping); err != nil {
-		return nil, fmt.Errorf("failed to decode key-column mapping JSON: %w", err)
-	}
-
-	return mapping, nil
 }

@@ -31,6 +31,7 @@ type DatabaseConfig struct {
 
 type RuntimeConfig struct {
 	WorkerCount int `mapstructure:"WORKER_COUNT"`
+	FileDestination string `mapstructure:"FILE_DESTINATION"`
 }
 
 // LoadConfig config file from given path

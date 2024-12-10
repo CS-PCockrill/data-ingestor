@@ -23,7 +23,6 @@ type TransposerFunctionsInterface interface {
 type TransposerFunctions struct {
 	CONFIG *config.Config
 	Logger *zap.Logger
-	KeyColumnMapping map[string]map[string]string // Map for key-column mappings
 }
 
 var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
@@ -131,10 +130,12 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 func (mp *TransposerFunctions) InsertRecordsUsingSchema(tx *sql.Tx, tableName string, obj map[string]interface{}) error {
 	// Log the start of the insertion process
 	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
-
 	columns, placeholderCount, err := mp.ExtractSQLDataFromExcel("db-template.xlsx", "Sheet1", "A3:K3", 3)
 
-	mp.Logger.Info("Extracted SQL Data (From Excel)", zap.Any("templateFile", "db-template.xlsx"), zap.Any("placeholderCount", placeholderCount), zap.Any("columns", columns))
+	mp.Logger.Info("Extracted SQL Data (From Excel)",
+		zap.Any("templateFile", "db-template.xlsx"),
+		zap.Any("placeholderCount", placeholderCount),
+		zap.Any("columns", columns))
 
 	// Extract SQL columns and rows from the object using ExtractSQLData
 	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj, "Record")

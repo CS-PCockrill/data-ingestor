@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -28,7 +29,6 @@ type LoaderFunctionsInterface interface {
 type LoaderFunctions struct {
 	CONFIG *config.Config
 	Logger *zap.Logger
-	KeyColumnMapping map[string]map[string]string // Map for key-column mappings
 
 }
 
@@ -503,5 +503,76 @@ func (l *LoaderFunctions) detectFileType(filePath string) (string, error) {
 //	return nil
 //}
 
+// MoveInputFile moves a file from its current location to a specified destination folder.
+// If the destination folder does not exist, it will be created.
+// Parameters:
+//   - inputFile: The full path to the file that needs to be moved.
+//   - destinationFolder: The target directory where the file will be moved.
+// Returns:
+//   - error: An error if the operation fails, otherwise nil.
+func (l *LoaderFunctions) MoveInputFile(inputFile, destinationFolder string) error {
+	// Check if the destination folder exists. If not, create it.
+	if _, err := os.Stat(destinationFolder); os.IsNotExist(err) {
+		// Create all necessary directories in the destination path.
+		if err := os.MkdirAll(destinationFolder, os.ModePerm); err != nil {
+			return fmt.Errorf("failed to create destination folder: %w", err)
+		}
+	}
 
+	// Extract the base name of the input file (e.g., "file.txt").
+	fileName := filepath.Base(inputFile)
 
+	// Construct the full path for the destination file.
+	destinationPath := filepath.Join(destinationFolder, fileName)
+
+	// Open the source file for reading.
+	sourceFile, err := os.Open(inputFile)
+	if err != nil {
+		// Log the error and return if the source file cannot be opened.
+		l.Logger.Error("Failed to open source file",
+			zap.String("inputFile", inputFile),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+
+	// Create the destination file for writing.
+	destFile, err := os.Create(destinationPath)
+	if err != nil {
+		// Log the error and return if the destination file cannot be created.
+		l.Logger.Error("Failed to create destination file",
+			zap.String("destinationPath", destinationPath),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+
+	// Copy the contents of the source file to the destination file.
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		// Log the error and return if the copy operation fails.
+		l.Logger.Error("Failed to copy file contents",
+			zap.String("source", inputFile),
+			zap.String("destination", destinationPath),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to copy file contents: %w", err)
+	}
+
+	// Remove the original source file after successfully copying its contents.
+	if err := os.RemoveAll(inputFile); err != nil {
+		// Log the error and return if the original file cannot be removed.
+		l.Logger.Error("Failed to remove original file",
+			zap.String("inputFile", inputFile),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to remove original file: %w", err)
+	}
+
+	// Log the successful move operation.
+	l.Logger.Info("File moved successfully",
+		zap.String("source", inputFile),
+		zap.String("destination", destinationPath),
+	)
+
+	return nil
+}

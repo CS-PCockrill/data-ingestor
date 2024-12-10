@@ -399,14 +399,14 @@ func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]inter
 	row := []interface{}{}
 	for key, value := range record {
 		// Get the corresponding column name
-		column, ok := columnMapping[key]
-		if !ok {
-			mp.Logger.Warn("Skipping unmapped key", zap.String("key", key))
-			continue // Skip keys that don't have a mapping
-		}
+		//column, ok := columnMapping[key]
+		//if !ok {
+		//	mp.Logger.Warn("Skipping unmapped key", zap.String("key", key))
+		//	continue // Skip keys that don't have a mapping
+		//}
 
 		// Append the column name and value
-		columns = append(columns, fmt.Sprintf(`"%s"`, column))
+		columns = append(columns, fmt.Sprintf(`"%s"`, key))
 		row = append(row, value)
 	}
 

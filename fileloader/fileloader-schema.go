@@ -125,60 +125,60 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 	return nil
 }
 
-func ParseXMLElementWithFlattening(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
-	baseRecord := make(map[string]interface{})
-	var repeatedFields []map[string]interface{}
-
-	// Decode the XML element
-	for {
-		token, err := decoder.Token()
-		if err != nil {
-			return nil, err
-		}
-
-		switch t := token.(type) {
-		case xml.StartElement:
-			// Parse nested elements
-			if t.Name.Local == "fnumbers" {
-				repeatedField := make(map[string]interface{})
-				if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
-					return nil, fmt.Errorf("failed to decode <fnumbers>: %w", err)
-				}
-				repeatedFields = append(repeatedFields, repeatedField)
-			} else {
-				// Decode non-repeated fields
-				var value string
-				if err := decoder.DecodeElement(&value, &t); err != nil {
-					return nil, fmt.Errorf("failed to decode element %s: %w", t.Name.Local, err)
-				}
-				baseRecord[t.Name.Local] = value
-			}
-
-		case xml.EndElement:
-			if t.Name.Local == "Record" {
-				// End of the <Record> element
-				if len(repeatedFields) > 0 {
-					// Flatten repeated fields
-					var results []map[string]interface{}
-					for _, repeatedField := range repeatedFields {
-						flattenedRecord := make(map[string]interface{})
-						// Copy base fields
-						for k, v := range baseRecord {
-							flattenedRecord[k] = v
-						}
-						// Add repeated field
-						for k, v := range repeatedField {
-							flattenedRecord[k] = v
-						}
-						results = append(results, flattenedRecord)
-					}
-					return results, nil
-				}
-				return []map[string]interface{}{baseRecord}, nil
-			}
-		}
-	}
-}
+//func ParseXMLElementWithFlattening(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
+//	baseRecord := make(map[string]interface{})
+//	var repeatedFields []map[string]interface{}
+//
+//	// Decode the XML element
+//	for {
+//		token, err := decoder.Token()
+//		if err != nil {
+//			return nil, err
+//		}
+//
+//		switch t := token.(type) {
+//		case xml.StartElement:
+//			// Parse nested elements
+//			if t.Name.Local == "fnumbers" {
+//				repeatedField := make(map[string]interface{})
+//				if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
+//					return nil, fmt.Errorf("failed to decode <fnumbers>: %w", err)
+//				}
+//				repeatedFields = append(repeatedFields, repeatedField)
+//			} else {
+//				// Decode non-repeated fields
+//				var value string
+//				if err := decoder.DecodeElement(&value, &t); err != nil {
+//					return nil, fmt.Errorf("failed to decode element %s: %w", t.Name.Local, err)
+//				}
+//				baseRecord[t.Name.Local] = value
+//			}
+//
+//		case xml.EndElement:
+//			if t.Name.Local == "Record" {
+//				// End of the <Record> element
+//				if len(repeatedFields) > 0 {
+//					// Flatten repeated fields
+//					var results []map[string]interface{}
+//					for _, repeatedField := range repeatedFields {
+//						flattenedRecord := make(map[string]interface{})
+//						// Copy base fields
+//						for k, v := range baseRecord {
+//							flattenedRecord[k] = v
+//						}
+//						// Add repeated field
+//						for k, v := range repeatedField {
+//							flattenedRecord[k] = v
+//						}
+//						results = append(results, flattenedRecord)
+//					}
+//					return results, nil
+//				}
+//				return []map[string]interface{}{baseRecord}, nil
+//			}
+//		}
+//	}
+//}
 
 func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]interface{}, error) {
 	// Open the XML file

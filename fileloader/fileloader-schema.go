@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"os"
-	"strings"
 )
 
 // StreamDecodeFileWithSchema is the streaming equivalent of DecodeFile for MapReduce.
@@ -99,19 +98,14 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 		// Process <Record> elements
 		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
 			// Parse the <Record> element into a map
-			record, err := ParseXMLElementGenerically(decoder)
+			record, err := ParseXMLElementWithFlattening(decoder, se)
 			if err != nil {
-				l.Logger.Error("Failed to decode XML record", zap.String("filePath", filePath), zap.Error(err))
-				return fmt.Errorf("failed to decode XML record: %w", err)
+				return fmt.Errorf("failed to parse <Record>: %w", err)
 			}
 
-			l.Logger.Info("Parsed Record", zap.Any("Record", record))
-
-			// Check and handle slices dynamically
-			emitRecords := FlattenNestedSlices(record)
-			for _, emitRecord := range emitRecords {
-				l.Logger.Debug("Emitting flattened record", zap.Any("record", emitRecord))
-				recordChan <- emitRecord
+			l.Logger.Info("Extracted Record", zap.Any("Record", record))
+			for _, rec := range record {
+				recordChan <- rec
 			}
 		}
 	}
@@ -120,92 +114,57 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 	return nil
 }
 
+func ParseXMLElementWithFlattening(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
+	baseRecord := make(map[string]interface{})
+	var repeatedFields []map[string]interface{}
 
-func ParseXMLElementGenerically(decoder *xml.Decoder) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
-	stack := []string{}
-
+	// Decode the XML element
 	for {
 		token, err := decoder.Token()
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read XML token: %w", err)
+			return nil, err
 		}
 
 		switch t := token.(type) {
 		case xml.StartElement:
-			// Push current element to stack
-			stack = append(stack, t.Name.Local)
-			// Prepare for nested slice
-			key := strings.Join(stack, ".")
-			if _, exists := result[key]; !exists {
-				result[key] = []map[string]interface{}{}
-			}
-
-		case xml.CharData:
-			// Handle text data for the current element
-			if len(stack) > 0 {
-				key := stack[len(stack)-1]
-				if _, exists := result[key]; exists {
-					result[key] = string(t)
+			// Parse nested elements
+			if t.Name.Local == "fnumbers" {
+				repeatedField := make(map[string]interface{})
+				if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
+					return nil, fmt.Errorf("failed to decode <fnumbers>: %w", err)
 				}
+				repeatedFields = append(repeatedFields, repeatedField)
+			} else {
+				// Decode non-repeated fields
+				var value string
+				if err := decoder.DecodeElement(&value, &t); err != nil {
+					return nil, fmt.Errorf("failed to decode element %s: %w", t.Name.Local, err)
+				}
+				baseRecord[t.Name.Local] = value
 			}
 
 		case xml.EndElement:
-			// Pop the current element from the stack
-			if len(stack) > 0 {
-				stack = stack[:len(stack)-1]
+			if t.Name.Local == "Record" {
+				// End of the <Record> element
+				if len(repeatedFields) > 0 {
+					// Flatten repeated fields
+					var results []map[string]interface{}
+					for _, repeatedField := range repeatedFields {
+						flattenedRecord := make(map[string]interface{})
+						// Copy base fields
+						for k, v := range baseRecord {
+							flattenedRecord[k] = v
+						}
+						// Add repeated field
+						for k, v := range repeatedField {
+							flattenedRecord[k] = v
+						}
+						results = append(results, flattenedRecord)
+					}
+					return results, nil
+				}
+				return []map[string]interface{}{baseRecord}, nil
 			}
 		}
 	}
-
-	if len(result) == 0 {
-		return nil, fmt.Errorf("no valid elements found in the XML")
-	}
-
-	return result, nil
-}
-
-func FlattenNestedSlices(record map[string]interface{}) []map[string]interface{} {
-	var results []map[string]interface{}
-
-	// Separate non-slice fields and slice fields
-	baseRecord := make(map[string]interface{})
-	slices := map[string][]map[string]interface{}{}
-
-	for key, value := range record {
-		switch v := value.(type) {
-		case []map[string]interface{}:
-			// Handle slices
-			slices[key] = v
-		default:
-			// Handle base fields
-			baseRecord[key] = v
-		}
-	}
-
-	// Generate rows for each slice
-	if len(slices) > 0 {
-		for sliceKey, sliceValues := range slices {
-			for _, sliceValue := range sliceValues {
-				flattenedRecord := make(map[string]interface{})
-				// Include base fields in each row
-				for k, v := range baseRecord {
-					flattenedRecord[k] = v
-				}
-				// Include slice fields in each row
-				for k, v := range sliceValue {
-					flattenedRecord[fmt.Sprintf("%s.%s", sliceKey, k)] = v
-				}
-				results = append(results, flattenedRecord)
-			}
-		}
-	} else {
-		// If no slices, use the base record as a single row
-		results = append(results, baseRecord)
-	}
-
-	return results
 }

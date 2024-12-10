@@ -261,15 +261,15 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
 	}
 
-	// Handle nested repeated elements like `fnumbers`
-	if fnumbers, exists := record["fnumbers"]; exists {
-		// Check if `fnumbers` is a slice and flatten it
-		if fnumbersSlice, ok := fnumbers.([]map[string]interface{}); ok {
-			for _, nested := range fnumbersSlice {
+	// Dynamically handle all nested repeated elements
+	for key, value := range record {
+		if nestedSlice, ok := value.([]map[string]interface{}); ok {
+			// Handle repeated elements (slices)
+			for _, nested := range nestedSlice {
 				flattened := make(map[string]interface{})
 				// Combine base fields with nested fields
 				for k, v := range record {
-					if k != "fnumbers" { // Skip the repeated element field itself
+					if k != key { // Skip the repeated element field itself
 						flattened[k] = v
 					}
 				}
@@ -278,23 +278,31 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 				}
 				nestedRecords = append(nestedRecords, flattened)
 			}
-		} else if singleFnumbers, ok := fnumbers.(map[string]interface{}); ok {
-			// Handle single `fnumbers` element
+		} else if nestedMap, ok := value.(map[string]interface{}); ok {
+			// Handle single nested elements
 			flattened := make(map[string]interface{})
 			for k, v := range record {
-				if k != "fnumbers" {
+				if k != key { // Skip the repeated element field itself
 					flattened[k] = v
 				}
 			}
-			for k, v := range singleFnumbers {
+			for k, v := range nestedMap {
 				flattened[k] = v
 			}
 			nestedRecords = append(nestedRecords, flattened)
+		} else {
+			// For non-repeated fields, ensure they are part of the base record
+			if len(nestedRecords) == 0 {
+				// Initialize with the base record if no repeated elements yet
+				baseRecord := make(map[string]interface{})
+				for k, v := range record {
+					baseRecord[k] = v
+				}
+				nestedRecords = append(nestedRecords, baseRecord)
+			}
 		}
-	} else {
-		// Add the base record as-is if no repeated elements are found
-		nestedRecords = append(nestedRecords, record)
 	}
+
 
 	// Ensure keys are flat (remove nested maps)
 	for i, record := range nestedRecords {

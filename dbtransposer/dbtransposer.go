@@ -218,9 +218,12 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 		}
 	}
 
-	// If no slices were processed, use the base row as a single entry
-	if len(rows) == 0 {
+	// Refined block to handle empty rows
+	if len(rows) == 0 && len(baseRow) > 0 {
 		rows = [][]interface{}{baseRow}
+		mp.Logger.Info("No slices found, setting rows to base row", zap.Any("BaseRow", baseRow))
+	} else if len(rows) > 0 {
+		mp.Logger.Info("Rows populated from slices", zap.Any("Rows", rows))
 	}
 
 	mp.Logger.Info("Rows finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))

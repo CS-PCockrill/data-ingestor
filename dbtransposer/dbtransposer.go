@@ -210,9 +210,9 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 			}
 		} else {
 			// Add normal fields to base row
-			//if dbTag == "-" || dbTag == "" {
-			//	continue // Skip fields without a valid "db" tag
-			//}
+			if dbTag == "-" || dbTag == "" {
+				continue // Skip fields without a valid "db" tag
+			}
 			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
 			baseRow = append(baseRow, value.Interface())
 		}

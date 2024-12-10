@@ -66,7 +66,7 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 		allValues = append(allValues, row...)
 
 		// Log the placeholders and values for debugging
-		mp.Logger.Info("Row being processed", zap.Any("Row", row))
+		mp.Logger.Info("===== Row being processed (Number of Rows) =====", zap.Any("Count", len(rows)), zap.Any("Row", row))
 		mp.Logger.Info("All placeholders so far", zap.Strings("Placeholders", allPlaceholders))
 		mp.Logger.Info("All values so far", zap.Any("Values", allValues))
 	}

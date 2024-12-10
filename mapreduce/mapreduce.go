@@ -44,9 +44,10 @@ func worker(taskChan <-chan map[string]interface{}, resultChan chan<- MapResult,
 		// Execute the Map function within the transaction
 		err = mapFunc(tx, tableName, batch)
 		if err != nil {
+			counter.IncrementErrors(1)
 			continue
 		}
-		counter.Increment(1)
+		counter.IncrementSucceeded(1)
 	}
 }
 

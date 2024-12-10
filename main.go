@@ -81,22 +81,22 @@ func main() {
 	//recordChan := make(chan interface{}, 1000) // Adjust the buffer size to handle more records
 	recordChan := make(chan map[string]interface{}, 1000)
 
-	xmlFilePath := "test-loader.xml"
-	jsonOutputPath := "output.json"
+	//xmlFilePath := "test-loader.xml"
+	//jsonOutputPath := "output.json"
 	//csvOutputPath := "output.csv"
-	excelOutputPath := "output.xlsx"
+	//excelOutputPath := "output.xlsx"
 
 	// Parse XML and flatten
-	records, err := fileLoader.FlattenXMLToMaps(xmlFilePath)
-	if err != nil {
-		fmt.Printf("Error flattening XML: %v\n", err)
-		return
-	}
+	//records, err := fileLoader.FlattenXMLToMaps(xmlFilePath)
+	//if err != nil {
+	//	fmt.Printf("Error flattening XML: %v\n", err)
+	//	return
+	//}
 
 	// Export to JSON
-	if err := fileLoader.ExportToJSON(records, jsonOutputPath); err != nil {
-		fmt.Printf("Error exporting to JSON: %v\n", err)
-	}
+	//if err := fileLoader.ExportToJSON(records, jsonOutputPath); err != nil {
+	//	fmt.Printf("Error exporting to JSON: %v\n", err)
+	//}
 
 	// Export to CSV
 	//if err := fileLoader.ExportToCSV(records, csvOutputPath); err != nil {
@@ -104,9 +104,9 @@ func main() {
 	//}
 
 	// Export to Excel
-	if err := fileLoader.ExportToExcel(records, excelOutputPath); err != nil {
-		fmt.Printf("Error exporting to Excel: %v\n", err)
-	}
+	//if err := fileLoader.ExportToExcel(records, excelOutputPath); err != nil {
+	//	fmt.Printf("Error exporting to Excel: %v\n", err)
+	//}
 
 	// Start streaming the file into the record channel
 	go func() {
@@ -151,7 +151,8 @@ func main() {
 			zap.Any("input_file", inputFile),
 			zap.Any("model_type", modelName),
 			zap.Any("table_name", tableName),
-			zap.Any("records_inserted", counter.Get()),
+			zap.Any("records_inserted_success", counter.GetSucceeded()),
+			zap.Any("records_inserted_error", counter.GetErrors()),
 			zap.Any("worker_count", app.Config.Runtime.WorkerCount))
 	}
 

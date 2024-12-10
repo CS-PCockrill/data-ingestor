@@ -7,6 +7,39 @@ import (
 	"sync"
 )
 
+type Counter struct {
+	mu    sync.Mutex
+	totalSucceeded int
+	totalErrors int
+}
+
+// IncrementSucceeded safely increments the total count by the given value.
+func (c *Counter) IncrementSucceeded(count int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.totalSucceeded += count
+}
+
+// GetSucceeded safely retrieves the total count.
+func (c *Counter) GetSucceeded() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.totalSucceeded
+}
+
+func (c *Counter) IncrementErrors(count int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.totalErrors += count
+}
+
+func (c *Counter) GetErrors() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.totalErrors
+}
+
+
 // GenerateSampleRecords Generate sample records (replace with actual data source)
 func GenerateSampleRecords(count int) []models.Record {
 	records := make([]models.Record, count)
@@ -34,24 +67,5 @@ func GenerateSampleRecords(count int) []models.Record {
 // Helper function to create a string pointer
 func stringPointer(s string) *string {
 	return &s
-}
-
-type Counter struct {
-	mu    sync.Mutex
-	total int
-}
-
-// Increment safely increments the total count by the given value.
-func (c *Counter) Increment(count int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.total += count
-}
-
-// Get safely retrieves the total count.
-func (c *Counter) Get() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.total
 }
 

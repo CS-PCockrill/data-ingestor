@@ -5,6 +5,7 @@ import (
 	"data-ingestor/mapreduce"
 	"database/sql"
 	"fmt"
+	"github.com/xuri/excelize/v2"
 	"go.uber.org/zap"
 	"reflect"
 	"strings"
@@ -130,6 +131,10 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 func (mp *TransposerFunctions) InsertRecordsUsingSchema(tx *sql.Tx, tableName string, obj map[string]interface{}) error {
 	// Log the start of the insertion process
 	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
+
+	columns, placeholderCount, err := mp.ExtractSQLDataFromExcel("db-template.xlsx", "Sheet1", "A3:K3", 3)
+
+	mp.Logger.Info("Extracted SQL Data (From Excel)", zap.Any("templateFile", "db-template.xlsx"), zap.Any("placeholderCount", placeholderCount), zap.Any("columns", columns))
 
 	// Extract SQL columns and rows from the object using ExtractSQLData
 	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj, "Record")
@@ -418,7 +423,74 @@ func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]inter
 }
 
 
+// ExtractSQLDataFromExcel processes an Excel file to determine SQL column names and placeholders based on a range and line.
+// This function handles:
+// - Identifying the number of columns in a specified range.
+// - Counting non-empty cells in a specific line to determine placeholders.
+//
+// Parameters:
+//   - filePath: Path to the Excel file.
+//   - sheetName: Name of the sheet to process.
+//   - rangeSpec: Cell range to analyze for column names (e.g., "A1:Z1").
+//   - line: The line number to analyze for placeholders.
+//
+// Returns:
+//   - columns: A list of column names.
+//   - placeholderCount: The number of placeholders based on the line.
+//   - error: An error, if any issues occur during processing.
+func (mp *TransposerFunctions) ExtractSQLDataFromExcel(filePath, sheetName, rangeSpec string, line int) ([]string, int, error) {
+	// Open the Excel file
+	file, err := excelize.OpenFile(filePath)
+	if err != nil {
+		mp.Logger.Error("Failed to open Excel file", zap.String("filePath", filePath), zap.Error(err))
+		return nil, 0, fmt.Errorf("failed to open Excel file: %w", err)
+	}
+	defer file.Close()
 
+	// Read the specified range to get column names
+	rows, err := file.GetRows(sheetName)
+	if err != nil {
+		mp.Logger.Error("Failed to read rows from sheet", zap.String("sheetName", sheetName), zap.Error(err))
+		return nil, 0, fmt.Errorf("failed to read rows from sheet: %w", err)
+	}
+
+	columns := []string{}
+	placeholderCount := 0
+
+	// Process the specified range for column names
+	for _, cell := range rows[0] { // Assuming first row of the range
+		if cell != "" {
+			columns = append(columns, cell)
+		}
+	}
+
+	// Log the extracted columns
+	mp.Logger.Info("Extracted columns from Excel",
+		zap.String("filePath", filePath),
+		zap.String("sheetName", sheetName),
+		zap.String("rangeSpec", rangeSpec),
+		zap.Strings("Columns", columns),
+	)
+
+	// Process the specified line to determine placeholders
+	if line <= len(rows) {
+		for _, cell := range rows[line-1] { // Adjusting for 0-based index
+			if cell != "" {
+				placeholderCount++
+			}
+		}
+	}
+
+	// Log the placeholder count
+	mp.Logger.Info("Determined placeholder count",
+		zap.String("filePath", filePath),
+		zap.String("sheetName", sheetName),
+		zap.Int("line", line),
+		zap.Int("PlaceholderCount", placeholderCount),
+	)
+
+	return columns, placeholderCount, nil
+}
 
 
 // ProcessMapResults handles the results of the map phase and ensures proper transaction management.

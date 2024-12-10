@@ -75,6 +75,9 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 	return nil
 }
 
+// StreamXMLFileWithSchema
+//
+// TODO - Can we add Tag Names which says what tag are we looking for per entry (e.g., 'Record' in test-loader.xml)
 func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan chan map[string]interface{}, modelName string) error {
 	l.Logger.Info("Streaming XML file", zap.String("filePath", filePath))
 

@@ -74,8 +74,8 @@ func main() {
 	//}
 
 	// Channel to stream records
-	recordChan := make(chan interface{}, 1000) // Adjust the buffer size to handle more records
-	//recordChan := make(chan map[string]interface{}, 1000)
+	//recordChan := make(chan interface{}, 1000) // Adjust the buffer size to handle more records
+	recordChan := make(chan map[string]interface{}, 1000)
 
 	xmlFilePath := "test-loader.xml"
 	jsonOutputPath := "output.json"
@@ -106,7 +106,7 @@ func main() {
 
 	// Start streaming the file into the record channel
 	go func() {
-		if err := fileLoader.StreamDecodeFile(inputFile, recordChan, modelName); err != nil {
+		if err := fileLoader.StreamDecodeFileWithSchema(inputFile, recordChan, modelName); err != nil {
 			app.Logger.Fatal("Error Streaming Input File",
 				zap.Any("input_file", inputFile),
 				zap.Any("model_type", modelName),
@@ -119,13 +119,13 @@ func main() {
 
 	// Run Stream MapReduce
 	err = mapreduce.MapReduceStreaming(
-		func(stream chan interface{}) error { // Stream function for MapReduce
+		func(stream chan map[string]interface{}) error { // Stream function for MapReduce
 			for record := range recordChan {
 				stream <- record
 			}
 			return nil
 		},
-		dbTransposer.InsertRecords,
+		dbTransposer.InsertRecordsUsingSchema,
 		dbTransposer.ProcessMapResults,
 		app.DB,
 		tableName,

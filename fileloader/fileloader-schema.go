@@ -105,6 +105,8 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 				return fmt.Errorf("failed to decode XML record: %w", err)
 			}
 
+			l.Logger.Info("Parsed Record", zap.Any("Record", record))
+
 			// Check and handle slices dynamically
 			emitRecords := FlattenNestedSlices(record)
 			for _, emitRecord := range emitRecords {

@@ -17,8 +17,8 @@ type LoaderFunctionsInterface interface {
 	DecodeFile(filePath, modelName string) ([]interface{}, error)
 	StreamDecodeFile(filePath string, recordChan chan interface{}, modelName string) error
 
-	FlattenXMLToMaps(filePath string) ([]map[string]string, error)
-	ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]string, error)
+	FlattenXMLToMaps(filePath string) ([]map[string]interface{}, error)
+	ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error)
 	ExportToJSON(records []map[string]string, outputPath string) error
 	ExportToCSV(records []map[string]string, outputPath string) error
 	ExportToExcel(records []map[string]string, outputPath string) error

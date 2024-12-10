@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"go.uber.org/zap"
 	"io"
@@ -173,7 +172,7 @@ func ParseXMLElementWithFlattening(decoder *xml.Decoder, start xml.StartElement)
 	}
 }
 
-func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]string, error) {
+func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]interface{}, error) {
 	// Open the XML file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -181,7 +180,7 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]string
 	}
 
 	decoder := xml.NewDecoder(file)
-	var records []map[string]string
+	var records []map[string]interface{}
 
 	for {
 		token, err := decoder.Token()
@@ -201,79 +200,92 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]string
 			records = append(records, flattenedRecords...)
 		}
 	}
+
+	l.Logger.Info("Successfully flattened XML to maps", zap.Int("record_count", len(records)))
 	return records, nil
 }
 
-func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]string, error) {
-	baseRecord := make(map[string]string) // Holds flat fields
-	nestedRecords := []map[string]string{}
+func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
+	//baseRecord := make(map[string]interface{}) // Holds flat fields
+	var nestedRecords []map[string]interface{}
 
-	// Helper to create a new record by merging baseRecord and additional fields
-	mergeRecord := func(extraFields map[string]string) map[string]string {
-		newRecord := make(map[string]string)
-		for k, v := range baseRecord {
-			newRecord[k] = v
-		}
-		for k, v := range extraFields {
-			newRecord[k] = v
-		}
-		return newRecord
-	}
-
-	for {
-		token, err := decoder.Token()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		switch t := token.(type) {
-		case xml.StartElement:
-			// Handle nested elements
-			var elementData map[string]string
-			fmt.Printf("Element Data: %v", t)
-			if err := decoder.DecodeElement(&elementData, &t); err != nil {
-				return nil, fmt.Errorf("failed to decode nested element: %w", err)
+	// Recursive function to parse nested XML elements
+	var parseElement func(start xml.StartElement) (map[string]interface{}, error)
+	parseElement = func(start xml.StartElement) (map[string]interface{}, error) {
+		record := make(map[string]interface{})
+		for {
+			token, err := decoder.Token()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, fmt.Errorf("error reading token: %w", err)
 			}
 
-			// If nested element is a list, treat it as a repeated record
-			if t.Name.Local == "fnumbers" {
-				nestedRecords = append(nestedRecords, elementData)
-			} else {
-				// Add flat fields to the base record
-				baseRecord[t.Name.Local] = elementData[t.Name.Local]
-			}
-
-		case xml.CharData:
-			// Add text content to the current base record
-			content := strings.TrimSpace(string(t))
-			if len(content) > 0 {
-				currentKey := start.Name.Local
-				baseRecord[currentKey] = content
-			}
-
-		case xml.EndElement:
-			if t.Name.Local == "Record" {
-				// If no nested records, return just the base record
-				if len(nestedRecords) == 0 {
-					return []map[string]string{baseRecord}, nil
+			switch t := token.(type) {
+			case xml.StartElement:
+				// Recursively parse nested elements
+				nested, err := parseElement(t)
+				if err != nil {
+					return nil, err
+				}
+				// Handle lists of repeated elements
+				if existing, exists := record[t.Name.Local]; exists {
+					if slice, ok := existing.([]map[string]interface{}); ok {
+						record[t.Name.Local] = append(slice, nested)
+					} else {
+						record[t.Name.Local] = []map[string]interface{}{existing.(map[string]interface{}), nested}
+					}
+				} else {
+					record[t.Name.Local] = nested
 				}
 
-				// Merge base record with each nested record
-				var results []map[string]string
-				for _, nested := range nestedRecords {
-					results = append(results, mergeRecord(nested))
+			case xml.CharData:
+				// Store character data as the value for the current element
+				content := strings.TrimSpace(string(t))
+				if content != "" {
+					record[start.Name.Local] = content
 				}
-				return results, nil
+
+			case xml.EndElement:
+				// Break out when the current element ends
+				if t.Name.Local == start.Name.Local {
+					return record, nil
+				}
 			}
 		}
+		return record, nil
 	}
 
-	return nil, errors.New("unexpected end of XML while parsing <Record>")
+	// Parse the starting <Record> element
+	record, err := parseElement(start)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
+	}
+
+	// Handle nested repeated elements
+	if fnumbers, exists := record["fnumbers"]; exists {
+		if fnumbersSlice, ok := fnumbers.([]map[string]interface{}); ok {
+			for _, nested := range fnumbersSlice {
+				flattened := make(map[string]interface{})
+				// Combine base fields with nested fields
+				for k, v := range record {
+					if k != "fnumbers" { // Skip the repeated element field itself
+						flattened[k] = v
+					}
+				}
+				for k, v := range nested {
+					flattened[k] = v
+				}
+				nestedRecords = append(nestedRecords, flattened)
+			}
+		}
+	} else {
+		nestedRecords = append(nestedRecords, record) // Add as-is if no repeated elements
+	}
+
+	return nestedRecords, nil
 }
-
 
 
 func (l *LoaderFunctions) ExportToJSON(records []map[string]string, outputPath string) error {

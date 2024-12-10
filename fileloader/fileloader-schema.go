@@ -209,6 +209,8 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 	var parseElement func(start xml.StartElement) (map[string]interface{}, error)
 	parseElement = func(start xml.StartElement) (map[string]interface{}, error) {
 		flatRecord := make(map[string]interface{})
+		currentKey := start.Name.Local // Current element name
+
 		for {
 			token, err := decoder.Token()
 			if err == io.EOF {
@@ -225,28 +227,21 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 				if err != nil {
 					return nil, err
 				}
-
-				// Handle repeated elements by appending them into a slice
-				if existing, exists := flatRecord[t.Name.Local]; exists {
-					if slice, ok := existing.([]map[string]interface{}); ok {
-						flatRecord[t.Name.Local] = append(slice, nested)
-					} else {
-						flatRecord[t.Name.Local] = []map[string]interface{}{existing.(map[string]interface{}), nested}
-					}
-				} else {
-					flatRecord[t.Name.Local] = nested
+				// Merge nested map directly into the flat record
+				for k, v := range nested {
+					flatRecord[k] = v
 				}
 
 			case xml.CharData:
 				// Store character data as the value for the current element
 				content := strings.TrimSpace(string(t))
 				if content != "" {
-					flatRecord[start.Name.Local] = content
+					flatRecord[currentKey] = content
 				}
 
 			case xml.EndElement:
 				// Break out when the current element ends
-				if t.Name.Local == start.Name.Local {
+				if t.Name.Local == currentKey {
 					return flatRecord, nil
 				}
 			}
@@ -297,6 +292,7 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 
 	return nestedRecords, nil
 }
+
 
 
 func (l *LoaderFunctions) ExportToJSON(records []map[string]interface{}, outputPath string) error {

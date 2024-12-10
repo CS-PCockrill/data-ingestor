@@ -19,9 +19,9 @@ type LoaderFunctionsInterface interface {
 
 	FlattenXMLToMaps(filePath string) ([]map[string]interface{}, error)
 	ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error)
-	ExportToJSON(records []map[string]string, outputPath string) error
-	ExportToCSV(records []map[string]string, outputPath string) error
-	ExportToExcel(records []map[string]string, outputPath string) error
+	ExportToJSON(records []map[string]interface{}, outputPath string) error
+	//ExportToCSV(records []map[string]string, outputPath string) error
+	ExportToExcel(records []map[string]interface{}, outputPath string) error
 
 }
 

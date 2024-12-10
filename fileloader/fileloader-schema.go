@@ -1,7 +1,6 @@
 package fileloader
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -288,7 +287,7 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 }
 
 
-func (l *LoaderFunctions) ExportToJSON(records []map[string]string, outputPath string) error {
+func (l *LoaderFunctions) ExportToJSON(records []map[string]interface{}, outputPath string) error {
 	file, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("failed to create JSON file: %w", err)
@@ -302,41 +301,41 @@ func (l *LoaderFunctions) ExportToJSON(records []map[string]string, outputPath s
 	return nil
 }
 
-func (l *LoaderFunctions) ExportToCSV(records []map[string]string, outputPath string) error {
-	file, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to create CSV file: %w", err)
-	}
+//func (l *LoaderFunctions) ExportToCSV(records []map[string]interface{}, outputPath string) error {
+//	file, err := os.Create(outputPath)
+//	if err != nil {
+//		return fmt.Errorf("failed to create CSV file: %w", err)
+//	}
+//
+//	writer := csv.NewWriter(file)
+//	defer writer.Flush()
+//
+//	// Write headers
+//	if len(records) > 0 {
+//		headers := []string{}
+//		for key := range records[0] {
+//			headers = append(headers, key)
+//		}
+//		if err := writer.Write(headers); err != nil {
+//			return fmt.Errorf("failed to write CSV headers: %w", err)
+//		}
+//
+//		// Write rows
+//		for _, record := range records {
+//			row := []string{}
+//			for _, header := range headers {
+//				row = append(row, record[header])
+//			}
+//			if err := writer.Write(row); err != nil {
+//				return fmt.Errorf("failed to write CSV row: %w", err)
+//			}
+//		}
+//	}
+//	fmt.Printf("Successfully exported to CSV: %s\n", outputPath)
+//	return nil
+//}
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// Write headers
-	if len(records) > 0 {
-		headers := []string{}
-		for key := range records[0] {
-			headers = append(headers, key)
-		}
-		if err := writer.Write(headers); err != nil {
-			return fmt.Errorf("failed to write CSV headers: %w", err)
-		}
-
-		// Write rows
-		for _, record := range records {
-			row := []string{}
-			for _, header := range headers {
-				row = append(row, record[header])
-			}
-			if err := writer.Write(row); err != nil {
-				return fmt.Errorf("failed to write CSV row: %w", err)
-			}
-		}
-	}
-	fmt.Printf("Successfully exported to CSV: %s\n", outputPath)
-	return nil
-}
-
-func (l *LoaderFunctions) ExportToExcel(records []map[string]string, outputPath string) error {
+func (l *LoaderFunctions) ExportToExcel(records []map[string]interface{}, outputPath string) error {
 	f := excelize.NewFile()
 
 	// Write headers and rows

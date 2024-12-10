@@ -79,7 +79,7 @@ func main() {
 
 	xmlFilePath := "test-loader.xml"
 	jsonOutputPath := "output.json"
-	csvOutputPath := "output.csv"
+	//csvOutputPath := "output.csv"
 	excelOutputPath := "output.xlsx"
 
 	// Parse XML and flatten
@@ -95,9 +95,9 @@ func main() {
 	}
 
 	// Export to CSV
-	if err := fileLoader.ExportToCSV(records, csvOutputPath); err != nil {
-		fmt.Printf("Error exporting to CSV: %v\n", err)
-	}
+	//if err := fileLoader.ExportToCSV(records, csvOutputPath); err != nil {
+	//	fmt.Printf("Error exporting to CSV: %v\n", err)
+	//}
 
 	// Export to Excel
 	if err := fileLoader.ExportToExcel(records, excelOutputPath); err != nil {

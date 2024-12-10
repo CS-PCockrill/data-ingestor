@@ -102,14 +102,20 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 
 		// Process <Record> elements
 		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
-			// Parse the <Record> element into a map
-			record, err := ParseXMLElementWithFlattening(decoder, se)
+			// Parse and flatten the <Record> element
+			flattenedRecords, err := l.ParseAndFlattenXMLElement(decoder, se)
 			if err != nil {
 				return fmt.Errorf("failed to parse <Record>: %w", err)
 			}
 
-			l.Logger.Info("Extracted Record", zap.Any("Record", record))
-			for _, rec := range record {
+			//// Parse the <Record> element into a map
+			//record, err := ParseXMLElementWithFlattening(decoder, se)
+			//if err != nil {
+			//	return fmt.Errorf("failed to parse <Record>: %w", err)
+			//}
+
+			l.Logger.Info("Extracted Record(s)", zap.Any("Record", flattenedRecords))
+			for _, rec := range flattenedRecords {
 				recordChan <- rec
 			}
 		}

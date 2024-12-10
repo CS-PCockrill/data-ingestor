@@ -42,7 +42,7 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
 
 	// Extract SQL columns and rows from the object using ExtractSQLData
-	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj)
+	columns, rows, err := mp.ExtractSQLData(obj)
 	if err != nil {
 		// Log and return an error if data extraction fails
 		mp.Logger.Error("Failed to extract SQL data",

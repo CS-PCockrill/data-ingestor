@@ -56,12 +56,16 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, recor
 	// Process all rows
 	for _, row := range rows {
 		rowPlaceholders := []string{}
-		for range row {
+
+		for _, row := range rows {
+			mp.Logger.Info("Processing row", zap.Any("row", row))
 			rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
 			placeholderIndex++
 		}
 		allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
 		allValues = append(allValues, row...)
+		mp.Logger.Info("Row placeholders", zap.Any("placeholders", rowPlaceholders))
+
 	}
 
 	// Combine the query with placeholders

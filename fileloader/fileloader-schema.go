@@ -291,9 +291,8 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 			}
 			nestedRecords = append(nestedRecords, flattened)
 		} else {
-			// For non-repeated fields, ensure they are part of the base record
+			// Add base record only once
 			if len(nestedRecords) == 0 {
-				// Initialize with the base record if no repeated elements yet
 				baseRecord := make(map[string]interface{})
 				for k, v := range record {
 					baseRecord[k] = v
@@ -302,7 +301,6 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 			}
 		}
 	}
-
 
 	// Ensure keys are flat (remove nested maps)
 	for i, record := range nestedRecords {

@@ -42,7 +42,7 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
 
 	// Extract SQL columns and rows from the object using ExtractSQLData
-	columns, rows, err := mp.ExtractSQLData(obj)
+	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj)
 	if err != nil {
 		// Log and return an error if data extraction fails
 		mp.Logger.Error("Failed to extract SQL data",
@@ -274,6 +274,68 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 	return columns, rows, nil
 }
 
+// ExtractSQLDataUsingSchema extracts SQL column names and rows from a record based on a JSON schema.
+// This function processes:
+// - Nested mappings defined in the schema
+// - Slices, generating rows for each element
+// - Regular fields based on the schema
+//
+// Parameters:
+//   - record: The data to be processed (struct or compatible type).
+//   - schema: The JSON schema defining the mappings (e.g., db, json, xml tags).
+//
+// Returns:
+//   - columns: A list of column names defined by the schema.
+//   - rows: A 2D slice of values for SQL insertion.
+//   - error: An error, if any issues occur during processing.
+func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record interface{}) ([]string, [][]interface{}, error) {
+	// Convert record to reflect.Value for processing
+	v := reflect.ValueOf(record)
+
+	// Ensure the input is a map for generic handling
+	if v.Kind() != reflect.Map {
+		mp.Logger.Error("Object is not a map", zap.Any("object_type", v.Kind()))
+		return nil, nil, fmt.Errorf("expected a map but got %s", v.Kind())
+	}
+
+	columns := []string{}
+	rows := [][]interface{}{{}} // Start with an empty row for appending values
+
+	// Iterate over map keys
+	for _, key := range v.MapKeys() {
+		fieldName := key.String() // Convert the map key to a string
+		value := v.MapIndex(key)  // Get the value for the key
+
+		// Add the field name as a column
+		columns = append(columns, fmt.Sprintf(`"%s"`, fieldName))
+
+		// Check if the value is a slice/array
+		if value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
+			var flattenedRows [][]interface{}
+			for i := 0; i < value.Len(); i++ {
+				element := value.Index(i).Interface()
+
+				// Copy existing rows and append slice element values
+				for _, row := range rows {
+					newRow := append(append([]interface{}{}, row...), element)
+					flattenedRows = append(flattenedRows, newRow)
+				}
+			}
+			rows = flattenedRows
+		} else {
+			// Add value to each existing row
+			for i := range rows {
+				rows[i] = append(rows[i], value.Interface())
+			}
+		}
+	}
+
+	mp.Logger.Info("Extracted SQL data", zap.Any("columns", columns), zap.Any("rows", rows))
+	return columns, rows, nil
+}
+
+
+
 
 // ProcessMapResults handles the results of the map phase and ensures proper transaction management.
 // It checks for errors in the map phase, rolls back transactions in case of errors, or commits them if all map results are successful.
@@ -292,7 +354,7 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 		if result.Tx == nil {
 			// Log an error if the transaction is nil
 			mp.Logger.Error("Failed to start a transaction",
-				zap.Int("BatchID", result.BatchID),
+				zap.Int("Worker ID", result.BatchID),
 				zap.Error(result.Err),
 			)
 			hasError = true
@@ -302,7 +364,7 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 		if result.Err != nil {
 			// Log an error if the map phase encountered an error
 			mp.Logger.Error("Transaction encountered an error",
-				zap.Int("BatchID", result.BatchID),
+				zap.Int("Worker ID", result.BatchID),
 				zap.Error(result.Err),
 			)
 			hasError = true
@@ -319,13 +381,13 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 				if err := result.Tx.Rollback(); err != nil {
 					// Log an error if the rollback fails
 					mp.Logger.Error("Failed to rollback transaction",
-						zap.Int("BatchID", result.BatchID),
+						zap.Int("Worker ID", result.BatchID),
 						zap.Error(err),
 					)
 				} else {
 					// Log success if the rollback completes
 					mp.Logger.Info("Transaction rolled back successfully",
-						zap.Int("BatchID", result.BatchID),
+						zap.Int("Worker ID", result.BatchID),
 					)
 				}
 			}
@@ -341,7 +403,7 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 			if err := result.Tx.Commit(); err != nil {
 				// Log an error if the commit fails
 				mp.Logger.Error("Failed to commit transaction",
-					zap.Int("BatchID", result.BatchID),
+					zap.Int("Worker ID", result.BatchID),
 					zap.Error(err),
 				)
 				// Return an error indicating that a commit failed
@@ -350,7 +412,7 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 
 			// Log success if the commit completes
 			mp.Logger.Info("Transaction committed successfully",
-				zap.Int("BatchID", result.BatchID),
+				zap.Int("Worker ID", result.BatchID),
 			)
 		}
 	}

@@ -161,12 +161,15 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 	columns := []string{}
 	rows := [][]interface{}{}
 
-	// Iterate over fields in the struct
+	// Collect all base fields first
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)
 
 		dbTag := field.Tag.Get("db")
+		if dbTag == "-" || dbTag == "" {
+			continue // Skip fields without a valid "db" tag
+		}
 
 		if field.Anonymous {
 			// Handle embedded anonymous structs
@@ -179,55 +182,69 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 			if len(nestedRows) > 0 {
 				baseRow = append(baseRow, nestedRows[0]...)
 			}
-		} else if value.Kind() == reflect.Slice {
-			// Handle slices: generate rows for each slice element
-			for j := 0; j < value.Len(); j++ {
-				element := value.Index(j).Interface()
-				elementValue := reflect.ValueOf(element)
-				// Create a copy of the base row to avoid overwriting
-				row := make([]interface{}, len(baseRow))
-				copy(row, baseRow)
-
-				// Set the slice element values into the appropriate indices
-				for k := 0; k < elementValue.NumField(); k++ {
-					sliceField := elementValue.Type().Field(k)
-					sliceDBTag := sliceField.Tag.Get("db")
-					if sliceDBTag == "" || sliceDBTag == "-" {
-						continue // Skip fields without a "db" tag
-					}
-
-					// Find the index of the slice field in the column list
-					mp.Logger.Info("Setting Slice Elements in Indices", zap.Any("columns", columns))
-					for colIdx, colName := range columns {
-						if colName == fmt.Sprintf(`"%s"`, sliceDBTag) {
-							row[colIdx] = elementValue.Field(k).Interface()
-							break
-						}
-					}
-				}
-				// Add the completed row
-				rows = append(rows, row)
-			}
-		} else {
-			// Add normal fields to base row
-			if dbTag == "-" || dbTag == "" {
-				continue // Skip fields without a valid "db" tag
-			}
+		} else if value.Kind() != reflect.Slice {
+			// Process normal fields
 			columns = append(columns, fmt.Sprintf(`"%s"`, dbTag))
 			baseRow = append(baseRow, value.Interface())
 		}
 	}
 
-	mp.Logger.Info("Rows finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))
+	// Process slices
+	for i := 0; i < t.NumField(); i++ {
+		//field := t.Field(i)
+		value := v.Field(i)
+
+		if value.Kind() == reflect.Slice {
+			// Handle slices: generate rows for each slice element
+			for j := 0; j < value.Len(); j++ {
+				element := value.Index(j).Interface()
+				elementValue := reflect.ValueOf(element)
+
+				// Create a new row based on the base row
+				row := make([]interface{}, len(baseRow))
+				copy(row, baseRow)
+
+				// Add slice element fields
+				for k := 0; k < elementValue.NumField(); k++ {
+					sliceField := elementValue.Type().Field(k)
+					sliceDBTag := sliceField.Tag.Get("db")
+					if sliceDBTag == "" || sliceDBTag == "-" {
+						continue // Skip fields without a valid "db" tag
+					}
+
+					// Add the field to the columns if not already present
+					colName := fmt.Sprintf(`"%s"`, sliceDBTag)
+					if !contains(columns, colName) {
+						columns = append(columns, colName)
+					}
+
+					// Append slice element field to the row
+					row = append(row, elementValue.Field(k).Interface())
+				}
+				rows = append(rows, row)
+			}
+		}
+	}
+
 	// If no slices were processed, use the base row as a single entry
 	if len(rows) == 0 {
 		rows = [][]interface{}{baseRow}
-		mp.Logger.Info("Setting rows to base row and finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))
-
 	}
 
+	mp.Logger.Info("Rows finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))
 	return columns, rows, nil
 }
+
+// Utility function to check if a string is in a slice
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 
 //func (mp *TransposerFunctions) StreamMapFunc(tx *sql.Tx, record interface{}) error {
 //	// Use ExtractSQLData to prepare SQL data dynamically

@@ -220,21 +220,21 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 		switch t := token.(type) {
 		case xml.StartElement:
 			// Handle nested elements, including repeated elements
-			if t.Name.Local == "fnumbers" {
-				// Decode a single repeated element into a map
-				repeatedField := make(map[string]string)
-				if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
-					return nil, fmt.Errorf("failed to decode repeated element: %w", err)
-				}
-				repeatedRecords = append(repeatedRecords, repeatedField)
-			} else {
+			//if t.Name.Local == "fnumbers" {
+			//	// Decode a single repeated element into a map
+			//	repeatedField := make(map[string]string)
+			//	if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
+			//		return nil, fmt.Errorf("failed to decode repeated element: %w", err)
+			//	}
+			//	repeatedRecords = append(repeatedRecords, repeatedField)
+			//} else {
 				// Decode a simple field
 				var value string
 				if err := decoder.DecodeElement(&value, &t); err != nil {
 					return nil, fmt.Errorf("failed to decode element: %w", err)
 				}
 				baseRecord[t.Name.Local] = value
-			}
+			//}
 
 		case xml.EndElement:
 			if t.Name.Local == "Record" {

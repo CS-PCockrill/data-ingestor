@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"fmt"
 	"go.uber.org/zap"
-	"log"
 	"reflect"
 	"strings"
 )
@@ -29,28 +28,26 @@ var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
 
 func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj interface{}) error {
 	//for obj := range batch {
-		mp.Logger.Info("Received object in InsertRecords", zap.Any("record", obj))
-		columns, rows, err := mp.ExtractSQLData(obj)
-		if err != nil {
-			mp.Logger.Error("Failed to extract SQL data",
-				zap.Any("record", obj), // Log the full object
-				zap.Error(err))
-			return fmt.Errorf("failed to extract SQL data: %w", err)
-		}
-
-	mp.Logger.Info("Extracted rows from data", zap.Any("rows", rows), zap.Int("row_count", len(rows)))
+	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
+	columns, rows, err := mp.ExtractSQLData(obj)
+	if err != nil {
+		mp.Logger.Error("Failed to extract SQL data",
+			zap.Any("object", obj), // Log the full object
+			zap.Error(err))
+		return fmt.Errorf("failed to extract SQL data: %w", err)
+	}
 
 	// Build the base query
-		query := fmt.Sprintf(
-			`INSERT INTO %s (%s) VALUES `,
-			tableName,
-			strings.Join(columns, ", "),
+	query := fmt.Sprintf(
+		`INSERT INTO %s (%s) VALUES `,
+		tableName,
+		strings.Join(columns, ", "),
 		)
 
-		// Add placeholders for all rows
-		var allPlaceholders []string
-		var allValues []interface{}
-		placeholderIndex := 1
+	// Add placeholders for all rows
+	var allPlaceholders []string
+	var allValues []interface{}
+	placeholderIndex := 1
 
 	mp.Logger.Info("Extracted rows from data", zap.Any("rows", rows), zap.Int("row_count", len(rows)))
 
@@ -69,31 +66,29 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 		allValues = append(allValues, row...)
 
 		// Log the placeholders and values for debugging
-		mp.Logger.Info("===== Row being processed (Number of Rows) =====", zap.Any("Count", len(rows)), zap.Any("Row", row))
+		mp.Logger.Info("Row being processed", zap.Any("Row", row))
 		mp.Logger.Info("All placeholders so far", zap.Strings("Placeholders", allPlaceholders))
 		mp.Logger.Info("All values so far", zap.Any("Values", allValues))
 	}
 
 	// Combine the query with placeholders
-		query += strings.Join(allPlaceholders, ", ")
+	query += strings.Join(allPlaceholders, ", ")
 
-		//mp.Logger.Info("Query After Combining: %v", query)
-		// Execute the query
-		mp.Logger.Info("All Values to Execute in SQL", zap.Any("All Values", allValues))
-		_, err = tx.Exec(query, allValues...)
-		if err != nil {
-			mp.Logger.Error("Failed to execute SQL query",
-				zap.String("query", query),
-				zap.Any("record", obj), // Log the full object
-				zap.Error(err))
-			return fmt.Errorf("failed to insert records: %w", err)
-		}
-
-		// Log successful execution
-		mp.Logger.Info("Successfully executed SQL query",
+	// Execute the query
+	mp.Logger.Info("All Values to Execute in SQL", zap.Any("All Values", allValues))
+	_, err = tx.Exec(query, allValues...)
+	if err != nil {
+		mp.Logger.Error("Failed to execute SQL query",
 			zap.String("query", query),
-			zap.Any("record", obj)) // Log the full object
-	//}
+			zap.Any("record", obj), // Log the full object
+			zap.Error(err))
+		return fmt.Errorf("failed to insert records: %w", err)
+	}
+
+	// Log successful execution
+	mp.Logger.Info("Successfully executed SQL query",
+		zap.String("query", query),
+		zap.Any("record", obj)) // Log the full object
 
 	return nil
 }
@@ -144,19 +139,37 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 //	return nil
 //}
 
+// ExtractSQLData extracts column names and rows for SQL insertion from a struct.
+// This function processes struct fields recursively, handling:
+// - Anonymous embedded structs
+// - Slices, where each element generates a new row
+// - Regular fields with `db` tags
+//
+// Parameters:
+//   - record: The struct instance to process
+//
+// Returns:
+//   - columns: A list of column names derived from `db` tags in the struct
+//   - rows: A 2D slice where each inner slice represents a row of values
+//   - error: An error, if any occurs during processing
 func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][]interface{}, error) {
+	// Reflect on the provided record
 	v := reflect.ValueOf(record)
 	t := reflect.TypeOf(record)
 
+	// Handle pointer types by de-referencing
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 		t = t.Elem()
 	}
 
+	// Ensure the record is a struct
 	if v.Kind() != reflect.Struct {
+		mp.Logger.Error("Object is not a Struct", zap.Any("object_type", v.Kind()))
 		return nil, nil, fmt.Errorf("expected a struct but got %s", v.Kind())
 	}
 
+	// Initialize base row, columns, and rows
 	baseRow := []interface{}{}
 	columns := []string{}
 	rows := [][]interface{}{}
@@ -166,24 +179,29 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 		field := t.Field(i)
 		value := v.Field(i)
 
+		// Get the `db` tag for the field
 		dbTag := field.Tag.Get("db")
 
 		if field.Anonymous {
 			// Handle embedded anonymous structs
+			mp.Logger.Info("Processing anonymous struct", zap.String("Field", field.Name))
 			nestedColumns, nestedRows, nestedErr := mp.ExtractSQLData(value.Interface())
 			if nestedErr != nil {
 				return nil, nil, nestedErr
 			}
 
+			// Append nested columns and rows
 			columns = append(columns, nestedColumns...)
 			if len(nestedRows) > 0 {
 				rows = append(rows, nestedRows...)
 			}
 		} else if value.Kind() == reflect.Slice {
 			// Handle slices: generate rows for each slice element
+			mp.Logger.Info("Processing slice field", zap.String("Field", field.Name))
 			for j := 0; j < value.Len(); j++ {
 				element := value.Index(j).Interface()
 				elementValue := reflect.ValueOf(element)
+
 				// Create a copy of the base row to avoid overwriting
 				row := make([]interface{}, len(baseRow))
 				copy(row, baseRow)
@@ -196,8 +214,7 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 						continue // Skip fields without a "db" tag
 					}
 
-					// Find the index of the slice field in the column list
-					mp.Logger.Info("Setting Slice Elements in Indices", zap.Any("columns", columns))
+					// Match slice field with the column index and set value
 					for colIdx, colName := range columns {
 						if colName == fmt.Sprintf(`"%s"`, sliceDBTag) {
 							row[colIdx] = elementValue.Field(k).Interface()
@@ -209,7 +226,7 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 				rows = append(rows, row)
 			}
 		} else {
-			// Add normal fields to base row
+			// Add fields that have "db" tags to columns and base row
 			if dbTag == "-" || dbTag == "" {
 				continue // Skip fields without a valid "db" tag
 			}
@@ -218,67 +235,62 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 		}
 	}
 
-	// Refined block to handle empty rows
+	// Handle cases with no slices: use the base row as a single entry
 	if len(rows) == 0 && len(baseRow) > 0 {
 		rows = [][]interface{}{baseRow}
-		mp.Logger.Info("No slices found, setting rows to base row", zap.Any("BaseRow", baseRow))
+		mp.Logger.Info("No slices found, using base row as a single entry", zap.Any("BaseRow", baseRow))
 	} else if len(rows) > 0 {
-		mp.Logger.Info("Rows populated from slices", zap.Any("Rows", rows))
+		mp.Logger.Info("Rows generated from slices", zap.Any("Rows", rows))
 	}
 
-	mp.Logger.Info("Rows finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))
+	// Log the final state
+	mp.Logger.Info("Finished extracting SQL data",
+		zap.Any("Columns", columns),
+		zap.Any("Rows", rows),
+	)
+
 	return columns, rows, nil
 }
 
-//func (mp *TransposerFunctions) StreamMapFunc(tx *sql.Tx, record interface{}) error {
-//	// Use ExtractSQLData to prepare SQL data dynamically
-//	columns, rows, err := mp.ExtractSQLData(record)
-//	if err != nil {
-//		return fmt.Errorf("failed to extract SQL data: %w", err)
-//	}
-//
-//	// Prepare SQL query
-//	query := fmt.Sprintf(`INSERT INTO SFLW_RECS (%s) VALUES (%s)`,
-//		strings.Join(columns, ", "),
-//		strings.Repeat("$1, ", len(columns)-1)+"$"+strconv.Itoa(len(columns)),
-//	)
-//
-//	// Execute the query for each row
-//	for _, row := range rows {
-//		_, err := tx.Exec(query, row...)
-//		if err != nil {
-//			return fmt.Errorf("failed to execute query: %w", err)
-//		}
-//	}
-//	return nil
-//}
 
 func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) error {
 	// Define the Reduce function
 	// Preemptively check for errors or nil transactions
 	hasError := false
+
 	for _, result := range results {
 		if result.Tx == nil {
-			log.Printf("Batch %d failed to start a transaction: %v", result.BatchID, result.Err)
+			mp.Logger.Error("Failed to start a transaction",
+				zap.Int("BatchID", result.BatchID),
+				zap.Error(result.Err),
+			)
 			hasError = true
 			continue
 		}
 
 		if result.Err != nil {
-			log.Printf("Batch %d failed: %v", result.BatchID, result.Err)
+			mp.Logger.Error("Transaction encountered an error",
+				zap.Int("BatchID", result.BatchID),
+				zap.Error(result.Err),
+			)
 			hasError = true
 		}
 	}
 
 	// Rollback all transactions if any errors are found
 	if hasError {
-		log.Println("Errors detected during the map phase. Rolling back all transactions.")
+		mp.Logger.Warn("Errors detected during the map phase. Rolling back all transactions.")
 		for _, result := range results {
 			if result.Tx != nil {
 				if err := result.Tx.Rollback(); err != nil {
-					log.Printf("Failed to rollback transaction for batch %d: %v", result.BatchID, err)
+					mp.Logger.Error("Failed to rollback transaction",
+						zap.Int("BatchID", result.BatchID),
+						zap.Error(err),
+					)
 				} else {
-					log.Printf("Transaction for batch %d rolled back successfully", result.BatchID)
+					mp.Logger.Info("Transaction rolled back successfully",
+						zap.Int("BatchID", result.BatchID),
+					)
 				}
 			}
 		}
@@ -289,13 +301,18 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 	for _, result := range results {
 		if result.Tx != nil {
 			if err := result.Tx.Commit(); err != nil {
-				log.Printf("Failed to commit transaction for batch %d: %v", result.BatchID, err)
+				mp.Logger.Error("Failed to commit transaction",
+					zap.Int("BatchID", result.BatchID),
+					zap.Error(err),
+				)
 				return fmt.Errorf("failed to commit transaction for batch %d: %w", result.BatchID, err)
 			}
-			log.Printf("Transaction for batch %d committed successfully", result.BatchID)
+			mp.Logger.Info("Transaction committed successfully",
+				zap.Int("BatchID", result.BatchID),
+			)
 		}
 	}
 
-	log.Println("All transactions committed successfully")
+	mp.Logger.Info("All transactions committed successfully")
 	return nil
 }

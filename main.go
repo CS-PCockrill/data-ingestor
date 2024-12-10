@@ -14,9 +14,9 @@ import (
 )
 
 type App struct {
-	Config *config.Config
+	Config    *config.Config
 	Logger    *zap.Logger
-	DB *sql.DB
+	DB 		  *sql.DB
 }
 
 func main() {
@@ -26,24 +26,26 @@ func main() {
 	}
 	defer app.Close()
 
+	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config, Logger: app.Logger}
+	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger}
+
 	// Define a command-line flag for the input file
 	var inputFile string
 	var modelName string
 	var tableName string
 
 	// Command-line flags
-	flag.StringVar(&inputFile, "file", "", "Path to the input file (.json or .xml)")
-	flag.StringVar(&modelName, "model", "", "Target model type (e.g., 'MistAMS')")
-	flag.StringVar(&tableName, "table", "", "Database table name for inserts (e.g., SFLW_RECS)")
+	flag.StringVar(&inputFile, "file", "", "Path to the input file ( .json or .xml )")
+	flag.StringVar(&modelName, "model", "", "Target model type ( MistAMS )")
+	flag.StringVar(&tableName, "table", "", "Database table name for inserts ( SFLW_RECS )")
 	flag.Parse()
 
 	if inputFile == "" || modelName == "" || tableName == "" {
-		log.Fatalf("Error: -file, -model, and -table flags are required..\n\tUsage: go run main.go -file test-loader.json -model MistAMSData -table SFLW_RECS")
+		app.Logger.Fatal("Missing Fields",
+			zap.Any("Error", "-file, -model, and -table flags are required"),
+			zap.Any("Usage", "go run main.go -file test-loader.xml -model MistAMS -table SFLW_RECS"))
 		return
 	}
-
-	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config}
-	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger}
 
 	// Decode the file and map records
 	//records, err := fileLoader.DecodeFile(inputFile, modelName)
@@ -66,7 +68,12 @@ func main() {
 	// Start streaming the file into the record channel
 	go func() {
 		if err := fileLoader.StreamDecodeFile(inputFile, recordChan, modelName); err != nil {
-			log.Fatalf("Error streaming input file %s - %v", inputFile, err)
+			app.Logger.Fatal("Error Streaming Input File",
+				zap.Any("input_file", inputFile),
+				zap.Any("model_type", modelName),
+				zap.Any("table_name", tableName),
+				zap.Any("worker_count", app.Config.Runtime.WorkerCount),
+				zap.Error(err))
 		}
 		close(recordChan)
 	}()
@@ -87,9 +94,20 @@ func main() {
 	)
 
 	if err != nil {
-		log.Fatalf("Stream MapReduce failed: %v", err)
+		app.Logger.Fatal("Stream MapReduce Failed",
+			zap.Any("input_file", inputFile),
+			zap.Any("model_type", modelName),
+			zap.Any("table_name", tableName),
+			zap.Any("worker_count", app.Config.Runtime.WorkerCount),
+			zap.Error(err))
+		return
 	} else {
 		log.Println("Stream MapReduce completed successfully")
+		app.Logger.Info("Stream MapReduce Succeeded",
+			zap.Any("input_file", inputFile),
+			zap.Any("model_type", modelName),
+			zap.Any("table_name", tableName),
+			zap.Any("worker_count", app.Config.Runtime.WorkerCount))
 	}
 
 }

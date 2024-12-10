@@ -16,14 +16,14 @@ type MapResult struct {
 // Task represents a unit of work to be processed.
 type Task struct {
 	Input  interface{}   // Input data for the task
-	Output interface{}   // Result after processing
+	Output interface{}   // Output result after processing
 	Err    error         // Any error encountered during processing
 }
 
 // MapFunc defines the function signature for the map phase.
 type MapFunc func(tx *sql.Tx, tableName string, batch interface{}) error
 
-// ReduceFunc defines the function signature for the reduce phase.
+// ReduceFunc defines the function signature for reduce phase.
 type ReduceFunc func(results []MapResult) error
 
 // worker processes tasks from the taskChan and sends results to resultChan.
@@ -36,13 +36,7 @@ func worker(taskChan <-chan interface{}, resultChan chan<- MapResult, mapFunc Ma
 	}
 
 	defer func() {
-		if err != nil {
-			// If an error occurred, rollback the transaction
-			resultChan <- MapResult{BatchID: batchID, Err: err, Tx: tx}
-		} else {
-			// If no errors, commit the transaction
-			resultChan <- MapResult{BatchID: batchID, Err: nil, Tx: tx}
-		}
+		resultChan <- MapResult{BatchID: batchID, Err: err, Tx: tx}
 	}()
 
 	for batch := range taskChan {
@@ -115,13 +109,11 @@ func MapReduceStreaming(
 		go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg)
 	}
 
-	// Stream records from the file and create batches
+	// Stream records from the file
 	go func() {
 		defer close(taskChan)
-
 		for record := range recordChan {
 			taskChan <- record
-
 		}
 	}()
 

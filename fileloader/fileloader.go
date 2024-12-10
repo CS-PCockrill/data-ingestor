@@ -186,7 +186,7 @@ func (l *LoaderFunctions) StreamXMLFile(filePath string, recordChan chan interfa
 				return fmt.Errorf("failed to decode XML record: %w", err)
 			}
 			// Log the successfully decoded record
-			l.Logger.Debug("Decoded record", zap.Any("record", record))
+			l.Logger.Debug("Decoded object as Record", zap.Any("record", record))
 			// Send the decoded record to the channel
 			recordChan <- record
 		}

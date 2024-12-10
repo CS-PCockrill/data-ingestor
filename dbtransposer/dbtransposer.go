@@ -26,58 +26,79 @@ type TransposerFunctions struct {
 
 var _ TransposerFunctionsInterface = (*TransposerFunctions)(nil)
 
+// InsertRecords inserts records into the specified database table.
+// It accepts a database transaction, table name, and an object containing the data to be inserted.
+// The function dynamically constructs the SQL query based on the object's fields and values.
+//
+// Parameters:
+// - tx: The database transaction used for executing the SQL query.
+// - tableName: The name of the table to insert the records into.
+// - obj: The object containing the data to be inserted.
+//
+// Returns:
+// - An error if the SQL query execution fails or data extraction fails.
 func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj interface{}) error {
-	//for obj := range batch {
+	// Log the start of the insertion process
 	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
+
+	// Extract SQL columns and rows from the object using ExtractSQLData
 	columns, rows, err := mp.ExtractSQLData(obj)
 	if err != nil {
+		// Log and return an error if data extraction fails
 		mp.Logger.Error("Failed to extract SQL data",
 			zap.Any("object", obj), // Log the full object
 			zap.Error(err))
 		return fmt.Errorf("failed to extract SQL data: %w", err)
 	}
 
-	// Build the base query
+	// Build the base INSERT query with the table name and columns
 	query := fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES `,
 		tableName,
 		strings.Join(columns, ", "),
-		)
+	)
 
-	// Add placeholders for all rows
+	// Variables to hold the placeholders and values for all rows
 	var allPlaceholders []string
 	var allValues []interface{}
 	placeholderIndex := 1
 
+	// Log the extracted rows and their count for debugging
 	mp.Logger.Info("Extracted rows from data", zap.Any("rows", rows), zap.Int("row_count", len(rows)))
 
+	// Iterate through the rows to generate placeholders and values
 	for _, row := range rows {
-		// Create placeholders for the current row
+		// Create a slice for placeholders for the current row
 		rowPlaceholders := []string{}
 		for range row {
+			// Generate placeholder strings (e.g., $1, $2, ...)
 			rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
 			placeholderIndex++
 		}
 
-		// Append placeholders for the current row
+		// Append the placeholders for the current row
 		allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
 
 		// Append the actual values for the current row
 		allValues = append(allValues, row...)
 
-		// Log the placeholders and values for debugging
+		// Log detailed information about the current row being processed
 		mp.Logger.Info("Row being processed", zap.Any("Row", row))
 		mp.Logger.Info("All placeholders so far", zap.Strings("Placeholders", allPlaceholders))
 		mp.Logger.Info("All values so far", zap.Any("Values", allValues))
 	}
 
-	// Combine the query with placeholders
+	// Combine the query with all generated placeholders
 	query += strings.Join(allPlaceholders, ", ")
 
-	// Execute the query
+	// Log the final SQL query and values before execution
+	mp.Logger.Info("Final SQL query being executed", zap.String("query", query))
 	mp.Logger.Info("All Values to Execute in SQL", zap.Any("All Values", allValues))
+
+	// Execute the SQL query with the collected values
 	_, err = tx.Exec(query, allValues...)
 	if err != nil {
+		// Log and return an error if query execution fails
 		mp.Logger.Error("Failed to execute SQL query",
 			zap.String("query", query),
 			zap.Any("record", obj), // Log the full object
@@ -85,13 +106,14 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 		return fmt.Errorf("failed to insert records: %w", err)
 	}
 
-	// Log successful execution
+	// Log successful execution of the SQL query
 	mp.Logger.Info("Successfully executed SQL query",
 		zap.String("query", query),
 		zap.Any("record", obj)) // Log the full object
 
 	return nil
 }
+
 
 //// InsertRecords inserts a batch of MistAMSData records into the database.
 //func InsertRecords(tx *sql.Tx, batch []interface{}) error {
@@ -253,13 +275,22 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 }
 
 
+// ProcessMapResults handles the results of the map phase and ensures proper transaction management.
+// It checks for errors in the map phase, rolls back transactions in case of errors, or commits them if all map results are successful.
+//
+// Parameters:
+// - results: A slice of MapResult objects containing the results of the map phase.
+//
+// Returns:
+// - An error if any transactions failed or if committing a transaction fails.
 func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) error {
-	// Define the Reduce function
-	// Preemptively check for errors or nil transactions
+	// Preemptively check for errors or nil transactions in the map results
 	hasError := false
 
+	// Iterate through each map result to identify errors or failed transactions
 	for _, result := range results {
 		if result.Tx == nil {
+			// Log an error if the transaction is nil
 			mp.Logger.Error("Failed to start a transaction",
 				zap.Int("BatchID", result.BatchID),
 				zap.Error(result.Err),
@@ -269,6 +300,7 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 		}
 
 		if result.Err != nil {
+			// Log an error if the map phase encountered an error
 			mp.Logger.Error("Transaction encountered an error",
 				zap.Int("BatchID", result.BatchID),
 				zap.Error(result.Err),
@@ -277,42 +309,53 @@ func (mp *TransposerFunctions) ProcessMapResults(results []mapreduce.MapResult) 
 		}
 	}
 
-	// Rollback all transactions if any errors are found
+	// Rollback all transactions if any errors are found during the map phase
 	if hasError {
 		mp.Logger.Warn("Errors detected during the map phase. Rolling back all transactions.")
+
 		for _, result := range results {
 			if result.Tx != nil {
+				// Attempt to rollback the transaction
 				if err := result.Tx.Rollback(); err != nil {
+					// Log an error if the rollback fails
 					mp.Logger.Error("Failed to rollback transaction",
 						zap.Int("BatchID", result.BatchID),
 						zap.Error(err),
 					)
 				} else {
+					// Log success if the rollback completes
 					mp.Logger.Info("Transaction rolled back successfully",
 						zap.Int("BatchID", result.BatchID),
 					)
 				}
 			}
 		}
+		// Return an error indicating that the map phase encountered issues
 		return fmt.Errorf("map phase completed with errors; all transactions rolled back")
 	}
 
 	// Commit all transactions if no errors are found
 	for _, result := range results {
 		if result.Tx != nil {
+			// Attempt to commit the transaction
 			if err := result.Tx.Commit(); err != nil {
+				// Log an error if the commit fails
 				mp.Logger.Error("Failed to commit transaction",
 					zap.Int("BatchID", result.BatchID),
 					zap.Error(err),
 				)
+				// Return an error indicating that a commit failed
 				return fmt.Errorf("failed to commit transaction for batch %d: %w", result.BatchID, err)
 			}
+
+			// Log success if the commit completes
 			mp.Logger.Info("Transaction committed successfully",
 				zap.Int("BatchID", result.BatchID),
 			)
 		}
 	}
-
+	// Log a summary indicating all transactions were committed successfully
 	mp.Logger.Info("All transactions committed successfully")
 	return nil
 }
+

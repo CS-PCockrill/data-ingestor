@@ -144,7 +144,7 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 //	return nil
 //}
 
-func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error) {
+func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][]interface{}, error) {
 	v := reflect.ValueOf(record)
 	t := reflect.TypeOf(record)
 
@@ -158,8 +158,8 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 	}
 
 	baseRow := []interface{}{}
-	columns = []string{}
-	rows = [][]interface{}{}
+	columns := []string{}
+	rows := [][]interface{}{}
 
 	// Iterate over fields in the struct
 	for i := 0; i < t.NumField(); i++ {

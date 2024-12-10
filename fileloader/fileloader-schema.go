@@ -204,6 +204,7 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]interf
 
 func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
 	var nestedRecords []map[string]interface{}
+	var resultRows []map[string]interface{}
 
 	// Recursive function to parse nested XML elements
 	var parseElement func(start xml.StartElement) (map[string]interface{}, error)
@@ -261,46 +262,30 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
 	}
 
-	// Dynamically handle all nested repeated elements
+	// Dynamically handle all nested repeated elements by creating new rows
 	for key, value := range record {
 		if nestedSlice, ok := value.([]map[string]interface{}); ok {
-			// Handle repeated elements (slices)
+			// For each nested element, create a new row
 			for _, nested := range nestedSlice {
 				flattened := make(map[string]interface{})
-				// Combine base fields with nested fields
+				// Copy base fields to the new row
 				for k, v := range record {
 					if k != key { // Skip the repeated element field itself
 						flattened[k] = v
 					}
 				}
+				// Add the fields from the nested element
 				for k, v := range nested {
 					flattened[k] = v
 				}
-				nestedRecords = append(nestedRecords, flattened)
-			}
-		} else if nestedMap, ok := value.(map[string]interface{}); ok {
-			// Handle single nested elements
-			flattened := make(map[string]interface{})
-			for k, v := range record {
-				if k != key { // Skip the repeated element field itself
-					flattened[k] = v
-				}
-			}
-			for k, v := range nestedMap {
-				flattened[k] = v
-			}
-			nestedRecords = append(nestedRecords, flattened)
-		} else {
-			// Add base record only once
-			if len(nestedRecords) == 0 {
-				baseRecord := make(map[string]interface{})
-				for k, v := range record {
-					baseRecord[k] = v
-				}
-				nestedRecords = append(nestedRecords, baseRecord)
+				// Append the new row directly to the result rows
+				resultRows = append(resultRows, flattened)
 			}
 		}
 	}
+
+	// If no nested repeated elements, add the base record as a single row
+	nestedRecords = append(nestedRecords, resultRows...)
 
 	// Ensure keys are flat (remove nested maps)
 	for i, record := range nestedRecords {

@@ -384,13 +384,6 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) ([]string, [][
 //   - rows: A 2D slice of values for SQL insertion.
 //   - error: An error, if any issues occur during processing.
 func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]interface{}, modelName string) ([]string, [][]interface{}, error) {
-	// Retrieve the key-column mapping for the given model
-	//columnMapping, exists := mp.KeyColumnMapping[modelName]
-	//if !exists {
-	//	mp.Logger.Error("No key-column mapping found for model", zap.String("modelName", modelName))
-	//	return nil, nil, fmt.Errorf("no key-column mapping found for model %s", modelName)
-	//}
-
 	// Initialize columns and rows
 	columns := []string{}
 	rows := [][]interface{}{}
@@ -398,13 +391,6 @@ func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]inter
 	// Flatten the record into columns and values
 	row := []interface{}{}
 	for key, value := range record {
-		// Get the corresponding column name
-		//column, ok := columnMapping[key]
-		//if !ok {
-		//	mp.Logger.Warn("Skipping unmapped key", zap.String("key", key))
-		//	continue // Skip keys that don't have a mapping
-		//}
-
 		// Append the column name and value
 		columns = append(columns, fmt.Sprintf(`"%s"`, key))
 		row = append(row, value)

@@ -5,6 +5,7 @@ import (
 	"data-ingestor/dbtransposer"
 	"data-ingestor/fileloader"
 	"data-ingestor/mapreduce"
+	"data-ingestor/util"
 	"database/sql"
 	"encoding/json"
 	"flag"
@@ -34,6 +35,9 @@ func main() {
 	var inputFile string
 	var modelName string
 	var tableName string
+
+	// Initialize the counter
+	counter := &util.Counter{}
 
 	// Command-line flags
 	flag.StringVar(&inputFile, "file", "", "Path to the input file ( .json or .xml )")
@@ -130,6 +134,7 @@ func main() {
 		app.DB,
 		tableName,
 		app.Config.Runtime.WorkerCount,
+		counter,
 	)
 
 	if err != nil {
@@ -146,6 +151,7 @@ func main() {
 			zap.Any("input_file", inputFile),
 			zap.Any("model_type", modelName),
 			zap.Any("table_name", tableName),
+			zap.Any("records_inserted", counter.Get()),
 			zap.Any("worker_count", app.Config.Runtime.WorkerCount))
 	}
 

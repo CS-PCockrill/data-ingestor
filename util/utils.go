@@ -4,6 +4,7 @@ import (
 	"data-ingestor/models"
 	"encoding/xml"
 	"fmt"
+	"sync"
 )
 
 // GenerateSampleRecords Generate sample records (replace with actual data source)
@@ -34,3 +35,23 @@ func GenerateSampleRecords(count int) []models.Record {
 func stringPointer(s string) *string {
 	return &s
 }
+
+type Counter struct {
+	mu    sync.Mutex
+	total int
+}
+
+// Increment safely increments the total count by the given value.
+func (c *Counter) Increment(count int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.total += count
+}
+
+// Get safely retrieves the total count.
+func (c *Counter) Get() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.total
+}
+

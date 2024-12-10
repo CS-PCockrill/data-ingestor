@@ -1,6 +1,7 @@
 package mapreduce
 
 import (
+	"data-ingestor/util"
 	"database/sql"
 	"fmt"
 	"sync"
@@ -27,7 +28,7 @@ type MapFunc func(tx *sql.Tx, tableName string, batch map[string]interface{}) er
 type ReduceFunc func(results []MapResult) error
 
 // worker processes tasks from the taskChan and sends results to resultChan.
-func worker(taskChan <-chan map[string]interface{}, resultChan chan<- MapResult, mapFunc MapFunc, db *sql.DB, tableName string, batchID int, wg *sync.WaitGroup) {
+func worker(taskChan <-chan map[string]interface{}, resultChan chan<- MapResult, mapFunc MapFunc, db *sql.DB, tableName string, batchID int, wg *sync.WaitGroup, counter *util.Counter) {
 	defer wg.Done()
 	tx, err := db.Begin() // Start a transaction
 	if err != nil {
@@ -42,6 +43,10 @@ func worker(taskChan <-chan map[string]interface{}, resultChan chan<- MapResult,
 	for batch := range taskChan {
 		// Execute the Map function within the transaction
 		err = mapFunc(tx, tableName, batch)
+		if err != nil {
+			continue
+		}
+		counter.Increment(1)
 	}
 }
 
@@ -53,10 +58,10 @@ func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db
 	var wg sync.WaitGroup
 
 	// Start workers
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg)
-	}
+	//for i := 0; i < workerCount; i++ {
+	//	wg.Add(1)
+		//go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg, )
+	//}
 
 	// Split records into batches and feed them to taskChan
 	go func() {
@@ -96,6 +101,7 @@ func MapReduceStreaming(
 	db *sql.DB,                              // Database connection
 	tableName string,                        // Database table name
 	workerCount int,                         // Number of workers
+	counter *util.Counter,
 ) error {
 	// Channels for streaming records and task batches
 	recordChan := make(chan map[string]interface{}, 20)
@@ -106,7 +112,7 @@ func MapReduceStreaming(
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg)
+		go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg, counter)
 	}
 
 	// Stream records from the file

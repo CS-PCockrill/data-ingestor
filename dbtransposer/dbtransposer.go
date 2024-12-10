@@ -45,28 +45,33 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 			strings.Join(columns, ", "),
 		)
 
-	mp.Logger.Info("Generated Rows", zap.Any("Rows", rows))
-
-
-	// Add placeholders for all rows
+		// Add placeholders for all rows
 		var allPlaceholders []string
 		var allValues []interface{}
 		placeholderIndex := 1
 
 		mp.Logger.Info("Rows in query", zap.Any("Rows", rows))
-		for _, row := range rows {
-			rowPlaceholders := []string{}
-			for range row {
-				rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
-				placeholderIndex++
-			}
-			allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
-			allValues = append(allValues, row...)
-			mp.Logger.Info("All Placeholders in query", zap.Any("Holders", allPlaceholders))
-
+	for _, row := range rows {
+		// Create placeholders for the current row
+		rowPlaceholders := []string{}
+		for range row {
+			rowPlaceholders = append(rowPlaceholders, fmt.Sprintf("$%d", placeholderIndex))
+			placeholderIndex++
 		}
 
-		// Combine the query with placeholders
+		// Append placeholders for the current row
+		allPlaceholders = append(allPlaceholders, fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
+
+		// Append the actual values for the current row
+		allValues = append(allValues, row...)
+
+		// Log the placeholders and values for debugging
+		mp.Logger.Info("Row being processed", zap.Any("Row", row))
+		mp.Logger.Info("All placeholders so far", zap.Strings("Placeholders", allPlaceholders))
+		mp.Logger.Info("All values so far", zap.Any("Values", allValues))
+	}
+
+	// Combine the query with placeholders
 		query += strings.Join(allPlaceholders, ", ")
 
 		//mp.Logger.Info("Query After Combining: %v", query)
@@ -212,9 +217,9 @@ func (mp *TransposerFunctions) ExtractSQLData(record interface{}) (columns []str
 
 	mp.Logger.Info("Rows finishing ExtractSQLData", zap.Any("Rows", rows), zap.Any("Columns", columns))
 	// If no slices were processed, use the base row as a single entry
-	//if len(rows) == 0 {
-	//	rows = [][]interface{}{baseRow}
-	//}
+	if len(rows) == 0 {
+		rows = [][]interface{}{baseRow}
+	}
 
 	return columns, rows, nil
 }

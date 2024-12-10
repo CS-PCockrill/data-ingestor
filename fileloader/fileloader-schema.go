@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"go.uber.org/zap"
 	"io"
@@ -192,19 +193,20 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]string
 		}
 
 		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
-			flattenedRecord, err := l.ParseAndFlattenXMLElement(decoder, se)
+			// Parse and flatten the <Record> element
+			flattenedRecords, err := l.ParseAndFlattenXMLElement(decoder, se)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse <Record>: %w", err)
 			}
-			records = append(records, flattenedRecord...)
+			records = append(records, flattenedRecords...)
 		}
 	}
 	return records, nil
 }
 
 func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]string, error) {
-	baseRecord := make(map[string]string)
-	var repeatedFields []map[string]string
+	baseRecord := make(map[string]string) // Base record for common fields
+	var repeatedRecords []map[string]string
 
 	for {
 		token, err := decoder.Token()
@@ -217,14 +219,16 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 
 		switch t := token.(type) {
 		case xml.StartElement:
-			// Handle repeated elements dynamically
+			// Handle nested elements, including repeated elements
 			if t.Name.Local == "fnumbers" {
+				// Decode a single repeated element into a map
 				repeatedField := make(map[string]string)
 				if err := decoder.DecodeElement(&repeatedField, &t); err != nil {
 					return nil, fmt.Errorf("failed to decode repeated element: %w", err)
 				}
-				repeatedFields = append(repeatedFields, repeatedField)
+				repeatedRecords = append(repeatedRecords, repeatedField)
 			} else {
+				// Decode a simple field
 				var value string
 				if err := decoder.DecodeElement(&value, &t); err != nil {
 					return nil, fmt.Errorf("failed to decode element: %w", err)
@@ -234,26 +238,32 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start 
 
 		case xml.EndElement:
 			if t.Name.Local == "Record" {
-				if len(repeatedFields) > 0 {
+				// When closing the <Record> tag, merge the base and repeated records
+				if len(repeatedRecords) > 0 {
 					var results []map[string]string
-					for _, repeatedField := range repeatedFields {
-						row := make(map[string]string)
+					for _, repeatedRecord := range repeatedRecords {
+						combinedRecord := make(map[string]string)
+						// Copy base fields
 						for k, v := range baseRecord {
-							row[k] = v
+							combinedRecord[k] = v
 						}
-						for k, v := range repeatedField {
-							row[k] = v
+						// Add repeated fields
+						for k, v := range repeatedRecord {
+							combinedRecord[k] = v
 						}
-						results = append(results, row)
+						results = append(results, combinedRecord)
 					}
 					return results, nil
 				}
+				// Return just the base record if no repeated fields
 				return []map[string]string{baseRecord}, nil
 			}
 		}
 	}
-	return nil, nil
+
+	return nil, errors.New("unexpected end of XML while parsing <Record>")
 }
+
 
 func (l *LoaderFunctions) ExportToJSON(records []map[string]string, outputPath string) error {
 	file, err := os.Create(outputPath)

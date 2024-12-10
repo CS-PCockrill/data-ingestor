@@ -196,6 +196,7 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string) ([]map[string]interf
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse <Record>: %w", err)
 			}
+			fmt.Printf("Flattened Records: %v", flattenedRecords)
 			records = append(records, flattenedRecords...)
 		}
 	}

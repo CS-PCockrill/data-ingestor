@@ -79,7 +79,7 @@ func (l *LoaderFunctions) StreamDecodeFile(filePath string, recordChan chan inte
 	case "json":
 		return l.StreamJSONFile(filePath, recordChan, modelName)
 	case "xml":
-		return l.StreamXMLFileWithSchema(filePath, recordChan)
+		return l.StreamXMLFileWithSchema(filePath, recordChan, modelName)
 	default:
 		// Log and return the error for unsupported file types
 		l.Logger.Error("Unsupported file type", zap.String("filePath", filePath), zap.String("fileType", fileType))
@@ -224,11 +224,9 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 	return nil
 }
 
-func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan chan interface{}) error {
-	// Log the start of XML streaming
+func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan chan interface{}, modelName string) error {
 	l.Logger.Info("Streaming XML file", zap.String("filePath", filePath))
 
-	// Open the XML file
 	file, err := os.Open(filePath)
 	if err != nil {
 		l.Logger.Error("Failed to open XML file", zap.String("filePath", filePath), zap.Error(err))
@@ -236,10 +234,10 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 	}
 
 	decoder := xml.NewDecoder(file)
+
 	for {
 		token, err := decoder.Token()
 		if err == io.EOF {
-			l.Logger.Info("Reached EOF for XML file", zap.String("filePath", filePath))
 			break
 		}
 		if err != nil {
@@ -247,13 +245,15 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 			return fmt.Errorf("failed to read XML token: %w", err)
 		}
 
-		// Handle <Record> elements
-		if startElement, ok := token.(xml.StartElement); ok && startElement.Name.Local == "Record" {
-			var record map[string]interface{}
-			if err := decoder.DecodeElement(&record, &startElement); err != nil {
+		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
+			// Parse the <Record> element into a map
+			record, err := ParseXMLElement(decoder)
+			if err != nil {
 				l.Logger.Error("Failed to decode XML record", zap.String("filePath", filePath), zap.Error(err))
 				return fmt.Errorf("failed to decode XML record: %w", err)
 			}
+
+			l.Logger.Debug("Decoded object as Record", zap.Any("record", record))
 			recordChan <- record
 		}
 	}
@@ -261,6 +261,7 @@ func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan ch
 	l.Logger.Info("Finished streaming XML file", zap.String("filePath", filePath))
 	return nil
 }
+
 
 
 
@@ -561,5 +562,45 @@ func (l *LoaderFunctions) streamJSON(file *os.File, recordChan chan interface{})
 	return nil
 }
 
+// ParseXMLElement dynamically parses an XML element into a map.
+func ParseXMLElement(decoder *xml.Decoder) (map[string]interface{}, error) {
+	var result = make(map[string]interface{})
+	var stack []string
+
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		switch t := token.(type) {
+		case xml.StartElement:
+			// Push element onto the stack
+			stack = append(stack, t.Name.Local)
+
+		case xml.CharData:
+			// Add text to the current element in the stack
+			if len(stack) > 0 {
+				key := stack[len(stack)-1]
+				result[key] = string(t)
+			}
+
+		case xml.EndElement:
+			// Pop the last element from the stack
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return nil, errors.New("no valid elements found in the XML")
+	}
+
+	return result, nil
+}
 
 

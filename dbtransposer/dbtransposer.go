@@ -68,6 +68,7 @@ func (mp *TransposerFunctions) InsertRecords(tx *sql.Tx, tableName string, obj i
 
 		//mp.Logger.Info("Query After Combining: %v", query)
 		// Execute the query
+		mp.Logger.Info("All Values to Execute in SQL", zap.Any("All Values", allValues))
 		_, err = tx.Exec(query, allValues...)
 		if err != nil {
 			mp.Logger.Error("Failed to execute SQL query",

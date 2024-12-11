@@ -57,8 +57,7 @@ func (l *LoaderFunctions) StreamDecodeFileWithSchema(filePath string, recordChan
 }
 
 
-// StreamJSONFileWithSchema streams records from a JSON file into a channel with schema validation.
-// Only keys present in the provided `columns` list are included in the streamed records.
+// StreamJSONFileWithSchema streams and flattens JSON records into rows, dynamically handling nested arrays.
 //
 // Parameters:
 // - filePath: The path to the JSON file to be streamed.
@@ -69,7 +68,7 @@ func (l *LoaderFunctions) StreamDecodeFileWithSchema(filePath string, recordChan
 // - An error if streaming or JSON processing fails.
 func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan chan map[string]interface{}, columns []string) error {
 	// Log the start of JSON streaming
-	l.Logger.Info("Starting JSON streaming with schema validation", zap.String("filePath", filePath))
+	l.Logger.Info("Starting JSON streaming with generic flattening", zap.String("filePath", filePath))
 
 	// Open the JSON file
 	file, err := os.Open(filePath)
@@ -78,7 +77,7 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 		return fmt.Errorf("failed to open JSON file: %w", err)
 	}
 
-	// Create a map for quick validation of allowed columns
+	// Create a set for quick validation of allowed columns
 	columnSet := make(map[string]struct{})
 	for _, col := range columns {
 		columnSet[col] = struct{}{}
@@ -97,67 +96,121 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 			return fmt.Errorf("failed to decode JSON record: %w", err)
 		}
 
-		// Validate and filter keys based on the allowed columns
-		validatedRecord := make(map[string]interface{})
+		// Flatten and process the record
+		baseRecord := make(map[string]interface{})
+		nestedRows := []map[string]interface{}{}
+
+		// Separate base fields and process nested arrays
 		for key, value := range record {
-			if _, allowed := columnSet[key]; allowed {
-				validatedRecord[key] = value
-			} else {
-				l.Logger.Warn("Skipping unmapped key", zap.String("key", key))
+			switch v := value.(type) {
+			case []interface{}: // Handle arrays dynamically
+				for _, nested := range v {
+					if nestedMap, ok := nested.(map[string]interface{}); ok {
+						flattenedRow := make(map[string]interface{})
+						// Copy base fields to the new row
+						for baseKey, baseValue := range record {
+							if baseKey != key { // Exclude the current array key
+								flattenedRow[baseKey] = baseValue
+							}
+						}
+						// Add nested fields to the row
+						for nestedKey, nestedValue := range nestedMap {
+							flattenedRow[nestedKey] = nestedValue
+						}
+						nestedRows = append(nestedRows, flattenedRow)
+					} else {
+						l.Logger.Warn("Skipping unsupported nested element in array", zap.String("key", key))
+					}
+				}
+			default:
+				// Add primitive fields to the base record
+				baseRecord[key] = value
 			}
 		}
 
-		// Send the validated record to the channel
-		recordChan <- validatedRecord
-		l.Logger.Debug("Streamed validated record", zap.Any("record", validatedRecord))
+		// If no nested rows, send the base record as-is
+		if len(nestedRows) == 0 {
+			l.Logger.Debug("Streaming base record", zap.Any("record", baseRecord))
+			recordChan <- baseRecord
+		} else {
+			// Stream each row generated from nested elements
+			for _, row := range nestedRows {
+				l.Logger.Debug("Streaming flattened row", zap.Any("row", row))
+				recordChan <- row
+			}
+		}
 	}
 
 	// Log successful completion
-	l.Logger.Info("Finished streaming JSON file", zap.String("filePath", filePath))
+	l.Logger.Info("Finished streaming JSON file with generic flattening", zap.String("filePath", filePath))
 	return nil
 }
 
 
-// StreamXMLFileWithSchema
+// StreamXMLFileWithSchema streams records from an XML file, processing and flattening them according to the provided schema.
+// This function dynamically handles nested elements and validates extracted fields against the specified columns.
 //
-// TODO - Can we add Tag Names which says what tag are we looking for per entry (e.g., 'Record' in test-loader.xml)
+// Parameters:
+// - filePath: The path to the XML file to be streamed.
+// - recordChan: A channel to send the parsed and flattened records.
+// - modelName: The name of the model being processed (currently used for contextual logging).
+// - columns: A list of valid column names to validate against.
+//
+// Returns:
+// - An error if any issues occur during file processing or parsing.
 func (l *LoaderFunctions) StreamXMLFileWithSchema(filePath string, recordChan chan map[string]interface{}, modelName string, columns []string) error {
-	l.Logger.Info("Streaming XML file", zap.String("filePath", filePath))
+	// Log the start of XML streaming
+	l.Logger.Info("Starting XML streaming", zap.String("filePath", filePath), zap.String("modelName", modelName))
 
-	// Open the file
+	// Open the XML file
 	file, err := os.Open(filePath)
 	if err != nil {
 		l.Logger.Error("Failed to open XML file", zap.String("filePath", filePath), zap.Error(err))
 		return fmt.Errorf("failed to open XML file: %w", err)
 	}
 
+	// Initialize the XML decoder
 	decoder := xml.NewDecoder(file)
+	l.Logger.Debug("Initialized XML decoder", zap.String("filePath", filePath))
 
 	for {
+		// Read the next XML token
 		token, err := decoder.Token()
 		if err == io.EOF {
+			// Log EOF and exit loop when the end of the file is reached
+			l.Logger.Info("Reached EOF for XML file", zap.String("filePath", filePath))
 			break
 		}
 		if err != nil {
+			// Log and return the error if token reading fails
 			l.Logger.Error("Failed to read XML token", zap.String("filePath", filePath), zap.Error(err))
 			return fmt.Errorf("failed to read XML token: %w", err)
 		}
 
-		// Process <Record> elements
+		// Check for the start of a <Record> element
 		if se, ok := token.(xml.StartElement); ok && se.Name.Local == "Record" {
+			l.Logger.Debug("Processing <Record> element", zap.String("element", se.Name.Local))
+
 			// Parse and flatten the <Record> element
 			flattenedRecords, err := l.ParseAndFlattenXMLElementWithColumns(decoder, se, columns)
 			if err != nil {
+				// Log and return the error if parsing fails
+				l.Logger.Error("Failed to parse <Record> element", zap.String("filePath", filePath), zap.Error(err))
 				return fmt.Errorf("failed to parse <Record>: %w", err)
 			}
 
-			l.Logger.Info("Extracted Record(s)", zap.Any("Record", flattenedRecords))
+			// Log the successfully parsed record(s)
+			l.Logger.Info("Extracted Record(s)", zap.String("filePath", filePath), zap.Any("records", flattenedRecords))
+
+			// Send each flattened record to the channel
 			for _, rec := range flattenedRecords {
+				l.Logger.Debug("Sending record to channel", zap.Any("record", rec))
 				recordChan <- rec
 			}
 		}
 	}
 
+	// Log successful completion of XML streaming
 	l.Logger.Info("Finished streaming XML file", zap.String("filePath", filePath))
 	return nil
 }
@@ -339,111 +392,6 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElementWithColumns(decoder *xml.Deco
 	l.Logger.Info("Completed parsing and flattening XML element", zap.Any("finalRecords", nestedRecords))
 	return nestedRecords, nil
 }
-
-
-
-//func (l *LoaderFunctions) ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error) {
-//	var nestedRecords []map[string]interface{}
-//	var resultRows []map[string]interface{}
-//
-//	// Recursive function to parse nested XML elements
-//	var parseElement func(start xml.StartElement) (map[string]interface{}, error)
-//	parseElement = func(start xml.StartElement) (map[string]interface{}, error) {
-//		flatRecord := make(map[string]interface{})
-//		currentKey := start.Name.Local // Current element name
-//
-//		for {
-//			token, err := decoder.Token()
-//			if err == io.EOF {
-//				break
-//			}
-//			if err != nil {
-//				return nil, fmt.Errorf("error reading token: %w", err)
-//			}
-//
-//			switch t := token.(type) {
-//			case xml.StartElement:
-//				// Recursively parse nested elements
-//				nested, err := parseElement(t)
-//				if err != nil {
-//					return nil, err
-//				}
-//				// Handle repeated elements by storing them as slices
-//				if existing, exists := flatRecord[t.Name.Local]; exists {
-//					if slice, ok := existing.([]map[string]interface{}); ok {
-//						flatRecord[t.Name.Local] = append(slice, nested)
-//					} else {
-//						flatRecord[t.Name.Local] = []map[string]interface{}{existing.(map[string]interface{}), nested}
-//					}
-//				} else {
-//					flatRecord[t.Name.Local] = nested
-//				}
-//
-//			case xml.CharData:
-//				// Store character data as the value for the current element
-//				content := strings.TrimSpace(string(t))
-//				if content != "" {
-//					flatRecord[currentKey] = content
-//				}
-//
-//			case xml.EndElement:
-//				// Break out when the current element ends
-//				if t.Name.Local == currentKey {
-//					return flatRecord, nil
-//				}
-//			}
-//		}
-//		return flatRecord, nil
-//	}
-//
-//	// Parse the starting <Record> element
-//	record, err := parseElement(start)
-//	if err != nil {
-//		return nil, fmt.Errorf("failed to parse <Record>: %w", err)
-//	}
-//
-//	// Dynamically handle all nested repeated elements by creating new rows
-//	for key, value := range record {
-//		if nestedSlice, ok := value.([]map[string]interface{}); ok {
-//			// For each nested element, create a new row
-//			for _, nested := range nestedSlice {
-//				flattened := make(map[string]interface{})
-//				// Copy base fields to the new row
-//				for k, v := range record {
-//					if k != key { // Skip the repeated element field itself
-//						flattened[k] = v
-//					}
-//				}
-//				// Add the fields from the nested element
-//				for k, v := range nested {
-//					flattened[k] = v
-//				}
-//				// Append the new row directly to the result rows
-//				resultRows = append(resultRows, flattened)
-//			}
-//		}
-//	}
-//
-//	// If no nested repeated elements, add the base record as a single row
-//	nestedRecords = append(nestedRecords, resultRows...)
-//
-//	// Ensure keys are flat (remove nested maps)
-//	for i, record := range nestedRecords {
-//		flat := make(map[string]interface{})
-//		for k, v := range record {
-//			if nestedMap, ok := v.(map[string]interface{}); ok {
-//				for nestedKey, nestedValue := range nestedMap {
-//					flat[nestedKey] = nestedValue // Flatten nested map into parent map
-//				}
-//			} else {
-//				flat[k] = v // Retain non-nested fields as-is
-//			}
-//		}
-//		nestedRecords[i] = flat
-//	}
-//
-//	return nestedRecords, nil
-//}
 
 
 func (l *LoaderFunctions) ExportToJSON(records []map[string]interface{}, outputPath string) error {

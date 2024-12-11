@@ -16,7 +16,7 @@ type TransposerFunctionsInterface interface {
 	InsertRecordsUsingSchema(tx *sql.Tx, tableName string, obj map[string]interface{}) error
 
 	ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error)
-	ExtractSQLDataUsingSchema(record map[string]interface{}, modelName string) ([]string, [][]interface{}, error)
+	ExtractSQLDataUsingSchema(record map[string]interface{}) ([]string, [][]interface{}, error)
 
 	ExtractSQLDataFromExcel(filePath, sheetName, rangeSpec string, line int) ([]string, int, error)
 

@@ -22,15 +22,15 @@ import (
 func (mp *TransposerFunctions) InsertRecordsUsingSchema(tx *sql.Tx, tableName string, obj map[string]interface{}) error {
 	// Log the start of the insertion process
 	mp.Logger.Info("Received object in InsertRecords", zap.Any("object", obj))
-	columns, placeholderCount, err := mp.ExtractSQLDataFromExcel("db-template.xlsx", "Sheet1", "A3:K3", 3)
+	//columns, placeholderCount, err := mp.ExtractSQLDataFromExcel("db-template.xlsx", "Sheet1", "A3:K3", 3)
 
-	mp.Logger.Info("Extracted SQL Data (From Excel)",
-		zap.Any("templateFile", "db-template.xlsx"),
-		zap.Any("placeholderCount", placeholderCount),
-		zap.Any("columns", columns))
+	//mp.Logger.Info("Extracted SQL Data (From Excel)",
+	//	zap.Any("templateFile", "db-template.xlsx"),
+	//	zap.Any("placeholderCount", placeholderCount),
+	//	zap.Any("columns", columns))
 
 	// Extract SQL columns and rows from the object using ExtractSQLData
-	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj, "Record")
+	columns, rows, err := mp.ExtractSQLDataUsingSchema(obj)
 	if err != nil {
 		// Log and return an error if data extraction fails
 		mp.Logger.Error("Failed to extract SQL data",
@@ -103,7 +103,7 @@ func (mp *TransposerFunctions) InsertRecordsUsingSchema(tx *sql.Tx, tableName st
 }
 
 
-// ExtractSQLDataUsingSchema extracts SQL column names and rows from a record based on a JSON schema.
+// ExtractSQLDataUsingSchema extracts SQL column names and rows from a record based on a map.
 // This function processes:
 // - Nested mappings defined in the schema
 // - Slices, generating rows for each element
@@ -111,13 +111,12 @@ func (mp *TransposerFunctions) InsertRecordsUsingSchema(tx *sql.Tx, tableName st
 //
 // Parameters:
 //   - record: The data to be processed (struct or compatible type).
-//   - schema: The JSON schema defining the mappings (e.g., db, json, xml tags).
 //
 // Returns:
 //   - columns: A list of column names defined by the schema.
 //   - rows: A 2D slice of values for SQL insertion.
 //   - error: An error, if any issues occur during processing.
-func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]interface{}, modelName string) ([]string, [][]interface{}, error) {
+func (mp *TransposerFunctions) ExtractSQLDataUsingSchema(record map[string]interface{}) ([]string, [][]interface{}, error) {
 	// Initialize columns and rows
 	columns := []string{}
 	rows := [][]interface{}{}

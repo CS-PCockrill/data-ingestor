@@ -72,9 +72,6 @@ func main() {
 	recordChan := make(chan map[string]interface{}, 1000)
 
 	excelInputPath := "db-template.xlsx"
-	//xmlFilePath := "test-loader.xml"
-	//jsonOutputPath := "output.json"
-	//csvOutputPath := "output.csv"
 	//excelOutputPath := "output.xlsx"
 
 	// Parse XML and flatten
@@ -82,16 +79,6 @@ func main() {
 	//if err != nil {
 	//	fmt.Printf("Error flattening XML: %v\n", err)
 	//	return
-	//}
-
-	// Export to JSON
-	//if err := fileLoader.ExportToJSON(records, jsonOutputPath); err != nil {
-	//	fmt.Printf("Error exporting to JSON: %v\n", err)
-	//}
-
-	// Export to CSV
-	//if err := fileLoader.ExportToCSV(records, csvOutputPath); err != nil {
-	//	fmt.Printf("Error exporting to CSV: %v\n", err)
 	//}
 
 	// Export to Excel

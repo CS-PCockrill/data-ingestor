@@ -18,6 +18,8 @@ type LoaderFunctionsInterface interface {
 	StreamDecodeFileWithSchema(filePath string, recordChan chan map[string]interface{}, modelName string, columns []string) error
 
 	FlattenXMLToMaps(filePath string, columns []string) ([]map[string]interface{}, error)
+	FlattenJSONToMaps(filePath string, columns []string) ([]map[string]interface{}, error)
+
 	//ParseAndFlattenXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]map[string]interface{}, error)
 	ExportToJSON(records []map[string]interface{}, outputPath string) error
 	//ExportToCSV(records []map[string]string, outputPath string) error

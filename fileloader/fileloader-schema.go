@@ -79,11 +79,6 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 	}
 	//defer file.Close() // Ensure file closure
 
-	// Create a set for quick validation of allowed columns
-	columnSet := make(map[string]struct{})
-	for _, col := range columns {
-		columnSet[col] = struct{}{}
-	}
 	l.Logger.Debug("Loaded allowed columns for validation", zap.Strings("columns", columns))
 
 	// Initialize JSON decoder
@@ -111,37 +106,7 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 			continue
 		}
 
-		// Flatten and process the record
-		baseRecord := make(map[string]interface{})
-		nestedRows := []map[string]interface{}{}
-
-		// Separate base fields and process nested arrays
-		for key, value := range recordMap {
-			switch v := value.(type) {
-			case []interface{}: // Handle arrays dynamically
-				for _, nested := range v {
-					if nestedMap, ok := nested.(map[string]interface{}); ok {
-						flattenedRow := make(map[string]interface{})
-						// Copy base fields to the new row
-						for baseKey, baseValue := range recordMap {
-							if baseKey != key { // Exclude the current array key
-								flattenedRow[baseKey] = baseValue
-							}
-						}
-						// Add nested fields to the row
-						for nestedKey, nestedValue := range nestedMap {
-							flattenedRow[nestedKey] = nestedValue
-						}
-						nestedRows = append(nestedRows, flattenedRow)
-					} else {
-						l.Logger.Warn("Skipping unsupported nested element in array", zap.String("key", key))
-					}
-				}
-			default:
-				// Add primitive fields to the base record
-				baseRecord[key] = value
-			}
-		}
+		nestedRows, baseRecord := l.ParseAndFlattenJSONElement(recordMap, columns)
 
 		// If no nested rows, send the base record as-is
 		if len(nestedRows) == 0 {
@@ -260,6 +225,141 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string, columns []string) ([
 		}
 	}
 	return records, nil
+}
+
+func (l *LoaderFunctions) ParseAndFlattenJSONElement(recordMap map[string]interface{}, columns []string) (nestedRows []map[string]interface{}, baseRecord map[string]interface{}) {
+	// Create a set for quick validation of allowed columns
+	columnSet := make(map[string]struct{})
+	for _, col := range columns {
+		columnSet[col] = struct{}{}
+	}
+	l.Logger.Debug("Loaded allowed columns for validation", zap.Strings("columns", columns))
+
+	// Initialize baseRecord to avoid nil map issues
+	baseRecord = make(map[string]interface{})
+
+	// Separate base fields and process nested arrays
+	for key, value := range recordMap {
+		// Validate the key against the allowed columns
+		if _, allowed := columnSet[key]; !allowed {
+			l.Logger.Warn("Skipping unmapped key", zap.String("key", key))
+			continue
+		}
+
+		switch v := value.(type) {
+		case []interface{}: // Handle arrays dynamically
+			for _, nested := range v {
+				if nestedMap, ok := nested.(map[string]interface{}); ok {
+					flattenedRow := make(map[string]interface{})
+					// Copy base fields to the new row
+					for baseKey, baseValue := range recordMap {
+						if baseKey != key { // Exclude the current array key
+							// Validate the baseKey
+							if _, allowed := columnSet[baseKey]; allowed {
+								flattenedRow[baseKey] = baseValue
+							} else {
+								l.Logger.Warn("Skipping unmapped base key", zap.String("baseKey", baseKey))
+							}
+						}
+					}
+					// Add nested fields to the row
+					for nestedKey, nestedValue := range nestedMap {
+						if _, allowed := columnSet[nestedKey]; allowed {
+							flattenedRow[nestedKey] = nestedValue
+						} else {
+							l.Logger.Warn("Skipping unmapped nested key", zap.String("nestedKey", nestedKey))
+						}
+					}
+					nestedRows = append(nestedRows, flattenedRow)
+				} else {
+					l.Logger.Warn("Skipping unsupported nested element in array", zap.String("key", key))
+				}
+			}
+		default:
+			// Add primitive fields to the base record
+			baseRecord[key] = value
+		}
+	}
+
+	// Validate baseRecord keys against allowed columns
+	validatedBaseRecord := make(map[string]interface{})
+	for key, value := range baseRecord {
+		if _, allowed := columnSet[key]; allowed {
+			validatedBaseRecord[key] = value
+		} else {
+			l.Logger.Warn("Skipping unmapped key in base record", zap.String("key", key))
+		}
+	}
+	baseRecord = validatedBaseRecord
+
+	return nestedRows, baseRecord
+}
+
+
+// FlattenJSONToMaps handles JSON files with a top-level key containing the records.
+// Supports flattening of nested arrays within each record and validates against allowed columns.
+//
+// Parameters:
+// - filePath: The path to the JSON file to be streamed.
+// - recordChan: A channel to send the streamed records.
+// - columns: A slice of allowed column names to validate the keys.
+//
+// Returns:
+// - An error if streaming or JSON processing fails.
+func (l *LoaderFunctions) FlattenJSONToMaps(filePath string, columns []string) ([]map[string]interface{}, error) {
+	// Log the start of JSON streaming
+	l.Logger.Info("Starting JSON streaming for file with top-level key", zap.String("filePath", filePath))
+
+	// Open the JSON file
+	file, err := os.Open(filePath)
+	if err != nil {
+		l.Logger.Error("Failed to open JSON file", zap.String("filePath", filePath), zap.Error(err))
+		return nil, fmt.Errorf("failed to open JSON file: %w", err)
+	}
+	//defer file.Close() // Ensure file closure
+
+	l.Logger.Debug("Loaded allowed columns for validation", zap.Strings("columns", columns))
+
+	// Initialize JSON decoder
+	decoder := json.NewDecoder(file)
+
+	// Decode the top-level JSON structure
+	var topLevel map[string]interface{}
+	if err := decoder.Decode(&topLevel); err != nil {
+		l.Logger.Error("Failed to decode top-level JSON structure", zap.String("filePath", filePath), zap.Error(err))
+		return nil, fmt.Errorf("failed to decode top-level JSON structure: %w", err)
+	}
+
+	// Extract the array under the "Records" key
+	records, ok := topLevel["Records"].([]interface{})
+	if !ok {
+		l.Logger.Error("Top-level key 'Records' is missing or not an array", zap.String("filePath", filePath))
+		return nil, fmt.Errorf("top-level key 'Records' is missing or not an array")
+	}
+
+	rows := []map[string]interface{}{}
+	// Process each record in the "Records" array
+	for _, record := range records {
+		recordMap, ok := record.(map[string]interface{})
+		if !ok {
+			l.Logger.Warn("Skipping non-object element in 'Records' array", zap.Any("element", record))
+			continue
+		}
+
+		nestedRows, baseRecord := l.ParseAndFlattenJSONElement(recordMap, columns)
+		// If no nested rows, send the base record as-is
+		if len(nestedRows) == 0 {
+			l.Logger.Debug("Loading base record", zap.Any("record", baseRecord))
+			rows = append(rows, baseRecord)
+		} else {
+			// Stream each row generated from nested elements
+			rows = append(rows, nestedRows...)
+		}
+	}
+
+	// Log successful completion
+	l.Logger.Info("Finished loading JSON file with top-level key", zap.String("filePath", filePath))
+	return rows, nil
 }
 
 // ParseAndFlattenXMLElementWithColumns parses and flattens an XML element, dynamically handling nested structures.

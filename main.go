@@ -52,23 +52,8 @@ func main() {
 	fileLoader := fileloader.LoaderFunctions{CONFIG: app.Config, Logger: app.Logger}
 	dbTransposer := dbtransposer.TransposerFunctions{CONFIG: app.Config, Logger: app.Logger}
 
-	// Decode the file and map records
-	//records, err := fileLoader.DecodeFile(inputFile, modelName)
-	//if err != nil {
-	//	log.Fatalf("Error decoding input file %s - %v", inputFile, err)
-	//	return
-	//}
-	//
-	//// Run MapReduce
-	//err = mapreduce.MapReduce(records, dbTransposer.InsertRecords, dbTransposer.ProcessMapResults, app.DB, tableName, app.Config.Runtime.WorkerCount)
-	//if err != nil {
-	//	log.Fatalf("MapReduce failed: %v", err)
-	//} else {
-	//	log.Printf("MapReduce completed successfully, inserted %d records", len(records))
-	//}
-
 	// Channel to stream records
-	//recordChan := make(chan interface{}, 1000) // Adjust the buffer size to handle more records
+	// Adjust the buffer size to handle more records
 	recordChan := make(chan map[string]interface{}, 1000)
 
 	excelInputPath := "db-template.xlsx"
@@ -85,8 +70,6 @@ func main() {
 	//if err := fileLoader.ExportToExcel(records, excelOutputPath); err != nil {
 	//	fmt.Printf("Error exporting to Excel: %v\n", err)
 	//}
-
-	//columns, placeholderCount, err := mp.ExtractSQLDataFromExcel("db-template.xlsx", "Sheet1", "A3:K3", 3)
 
 	templateColumns, _, err := dbTransposer.ExtractSQLDataFromExcel(excelInputPath, "Sheet1", "A3:K3", 3)
 	if err != nil {
@@ -111,9 +94,9 @@ func main() {
 		close(recordChan)
 	}()
 
-	// Run Stream MapReduce
+	// Run Stream Map-Reduce
 	err = mapreduce.MapReduceStreaming(
-		func(stream chan map[string]interface{}) error { // Stream function for MapReduce
+		func(stream chan map[string]interface{}) error { // Stream function for Map-Reduce
 			for record := range recordChan {
 				stream <- record
 			}

@@ -57,7 +57,8 @@ func (l *LoaderFunctions) StreamDecodeFileWithSchema(filePath string, recordChan
 }
 
 
-// StreamJSONFileWithSchema streams and flattens JSON records into rows, dynamically handling nested arrays.
+// StreamJSONFileWithSchema streams records from a JSON file into a channel with schema validation.
+// Only keys present in the provided `columns` list are included in the streamed records.
 //
 // Parameters:
 // - filePath: The path to the JSON file to be streamed.
@@ -68,7 +69,7 @@ func (l *LoaderFunctions) StreamDecodeFileWithSchema(filePath string, recordChan
 // - An error if streaming or JSON processing fails.
 func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan chan map[string]interface{}, columns []string) error {
 	// Log the start of JSON streaming
-	l.Logger.Info("Starting JSON streaming with generic flattening", zap.String("filePath", filePath))
+	l.Logger.Info("Starting JSON streaming with schema validation", zap.String("filePath", filePath))
 
 	// Open the JSON file
 	file, err := os.Open(filePath)
@@ -77,7 +78,7 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 		return fmt.Errorf("failed to open JSON file: %w", err)
 	}
 
-	// Create a set for quick validation of allowed columns
+	// Create a map for quick validation of allowed columns
 	columnSet := make(map[string]struct{})
 	for _, col := range columns {
 		columnSet[col] = struct{}{}
@@ -96,56 +97,25 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 			return fmt.Errorf("failed to decode JSON record: %w", err)
 		}
 
-		// Flatten and process the record
-		baseRecord := make(map[string]interface{})
-		nestedRows := []map[string]interface{}{}
-
-		// Separate base fields and process nested arrays
+		// Validate and filter keys based on the allowed columns
+		validatedRecord := make(map[string]interface{})
 		for key, value := range record {
-			switch v := value.(type) {
-			case []interface{}: // Handle arrays dynamically
-				for _, nested := range v {
-					if nestedMap, ok := nested.(map[string]interface{}); ok {
-						flattenedRow := make(map[string]interface{})
-						// Copy base fields to the new row
-						for baseKey, baseValue := range record {
-							if baseKey != key { // Exclude the current array key
-								flattenedRow[baseKey] = baseValue
-							}
-						}
-						// Add nested fields to the row
-						for nestedKey, nestedValue := range nestedMap {
-							flattenedRow[nestedKey] = nestedValue
-						}
-						nestedRows = append(nestedRows, flattenedRow)
-					} else {
-						l.Logger.Warn("Skipping unsupported nested element in array", zap.String("key", key))
-					}
-				}
-			default:
-				// Add primitive fields to the base record
-				baseRecord[key] = value
+			if _, allowed := columnSet[key]; allowed {
+				validatedRecord[key] = value
+			} else {
+				l.Logger.Warn("Skipping unmapped key", zap.String("key", key))
 			}
 		}
 
-		// If no nested rows, send the base record as-is
-		if len(nestedRows) == 0 {
-			l.Logger.Debug("Streaming base record", zap.Any("record", baseRecord))
-			recordChan <- baseRecord
-		} else {
-			// Stream each row generated from nested elements
-			for _, row := range nestedRows {
-				l.Logger.Debug("Streaming flattened row", zap.Any("row", row))
-				recordChan <- row
-			}
-		}
+		// Send the validated record to the channel
+		recordChan <- validatedRecord
+		l.Logger.Debug("Streamed validated record", zap.Any("record", validatedRecord))
 	}
 
 	// Log successful completion
-	l.Logger.Info("Finished streaming JSON file with generic flattening", zap.String("filePath", filePath))
+	l.Logger.Info("Finished streaming JSON file", zap.String("filePath", filePath))
 	return nil
 }
-
 
 // StreamXMLFileWithSchema streams records from an XML file, processing and flattening them according to the provided schema.
 // This function dynamically handles nested elements and validates extracted fields against the specified columns.

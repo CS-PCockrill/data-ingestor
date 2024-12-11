@@ -58,6 +58,7 @@ func main() {
 
 	excelInputPath := "db-template.xlsx"
 	csvOutputPath := "csv-output.csv"
+	excelOutputPath := "xl-output.xlsx"
 	//excelOutputPath := "output.xlsx"
 
 
@@ -78,8 +79,13 @@ func main() {
 		return
 	}
 
-	// Export to Excel
+	// Export to CSV
 	if err := fileLoader.ExportToCSV(records, csvOutputPath); err != nil {
+		fmt.Printf("Error exporting to CSV: %v\n", err)
+	}
+
+	// Export to Excel
+	if err := fileLoader.ExportToExcel(records, excelOutputPath); err != nil {
 		fmt.Printf("Error exporting to Excel: %v\n", err)
 	}
 

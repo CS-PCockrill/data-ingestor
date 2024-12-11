@@ -71,6 +71,7 @@ func main() {
 	//recordChan := make(chan interface{}, 1000) // Adjust the buffer size to handle more records
 	recordChan := make(chan map[string]interface{}, 1000)
 
+	excelInputPath := "db-template.xlsx"
 	//xmlFilePath := "test-loader.xml"
 	//jsonOutputPath := "output.json"
 	//csvOutputPath := "output.csv"
@@ -98,9 +99,21 @@ func main() {
 	//	fmt.Printf("Error exporting to Excel: %v\n", err)
 	//}
 
+	//columns, placeholderCount, err := mp.ExtractSQLDataFromExcel("db-template.xlsx", "Sheet1", "A3:K3", 3)
+
+	templateColumns, _, err := dbTransposer.ExtractSQLDataFromExcel(excelInputPath, "Sheet1", "A3:K3", 3)
+	if err != nil {
+		app.Logger.Fatal("Failed to Load SQL Data from Excel",
+			zap.Any("excelInput", excelInputPath),
+			zap.Any("sheetName", "Sheet1"),
+			zap.Any("rangeSpec", "A3:K3"),
+			zap.Any("line", 3),
+			zap.Error(err))
+	}
+
 	// Start streaming the file into the record channel
 	go func() {
-		if err := fileLoader.StreamDecodeFileWithSchema(inputFile, recordChan, modelName); err != nil {
+		if err := fileLoader.StreamDecodeFileWithSchema(inputFile, recordChan, modelName, templateColumns); err != nil {
 			app.Logger.Fatal("Error Streaming Input File",
 				zap.Any("input_file", inputFile),
 				zap.Any("model_type", modelName),
@@ -128,7 +141,7 @@ func main() {
 	)
 
 	if err != nil {
-		app.Logger.Fatal("Stream MapReduce Failed",
+		app.Logger.Fatal("Stream Map-Reduce Failed",
 			zap.Any("input_file", inputFile),
 			zap.Any("model_type", modelName),
 			zap.Any("table_name", tableName),
@@ -137,7 +150,7 @@ func main() {
 		return
 	}
 
-	log.Println("Stream MapReduce completed successfully")
+	log.Println("Stream Map-Reduce completed successfully")
 	app.Logger.Info("Stream MapReduce Succeeded",
 		zap.Any("input_file", inputFile),
 		zap.Any("model_type", modelName),

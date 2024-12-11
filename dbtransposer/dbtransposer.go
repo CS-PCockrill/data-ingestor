@@ -16,6 +16,8 @@ type TransposerFunctionsInterface interface {
 	InsertRecords(tx *sql.Tx, tableName string, batch interface{}) error
 	ExtractSQLData(record interface{}) (columns []string, rows [][]interface{}, err error)
 
+	ExtractSQLDataFromExcel(filePath, sheetName, rangeSpec string, line int) ([]string, int, error)
+
 	// ProcessMapResults is the Reducer function
 	ProcessMapResults(results []mapreduce.MapResult) error
 }

@@ -57,19 +57,9 @@ func main() {
 	recordChan := make(chan map[string]interface{}, 1000)
 
 	excelInputPath := "db-template.xlsx"
+	csvOutputPath := "csv-output.csv"
 	//excelOutputPath := "output.xlsx"
 
-	// Parse XML and flatten
-	//records, err := fileLoader.FlattenXMLToMaps(xmlFilePath)
-	//if err != nil {
-	//	fmt.Printf("Error flattening XML: %v\n", err)
-	//	return
-	//}
-
-	// Export to Excel
-	//if err := fileLoader.ExportToExcel(records, excelOutputPath); err != nil {
-	//	fmt.Printf("Error exporting to Excel: %v\n", err)
-	//}
 
 	templateColumns, _, err := dbTransposer.ExtractSQLDataFromExcel(excelInputPath, "Sheet1", "A3:K3", 3)
 	if err != nil {
@@ -79,6 +69,18 @@ func main() {
 			zap.Any("rangeSpec", "A3:K3"),
 			zap.Any("line", 3),
 			zap.Error(err))
+	}
+
+	// Parse XML and flatten
+	records, err := fileLoader.FlattenXMLToMaps(inputFile, templateColumns)
+	if err != nil {
+		fmt.Printf("Error flattening XML: %v\n", err)
+		return
+	}
+
+	// Export to Excel
+	if err := fileLoader.ExportToCSV(records, csvOutputPath); err != nil {
+		fmt.Printf("Error exporting to Excel: %v\n", err)
 	}
 
 	// Start streaming the file into the record channel

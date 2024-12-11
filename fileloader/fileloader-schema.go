@@ -1,6 +1,7 @@
 package fileloader
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -91,7 +92,7 @@ func (l *LoaderFunctions) StreamJSONFileWithSchema(filePath string, recordChan c
 		return fmt.Errorf("failed to decode top-level JSON structure: %w", err)
 	}
 
-	// Extract the array under the "Records" key
+	// Extract the array under the "Records" key (FIXME: Records is a placeholder, change to however the JSON files are structured to get to the list of records)
 	records, ok := topLevel["Records"].([]interface{})
 	if !ok {
 		l.Logger.Error("Top-level key 'Records' is missing or not an array", zap.String("filePath", filePath))
@@ -227,6 +228,72 @@ func (l *LoaderFunctions) FlattenXMLToMaps(filePath string, columns []string) ([
 	return records, nil
 }
 
+// FlattenJSONToMaps handles JSON files with a top-level key containing the records.
+// Supports flattening of nested arrays within each record and validates against allowed columns.
+//
+// Parameters:
+// - filePath: The path to the JSON file to be streamed.
+// - recordChan: A channel to send the streamed records.
+// - columns: A slice of allowed column names to validate the keys.
+//
+// Returns:
+// - An error if streaming or JSON processing fails.
+func (l *LoaderFunctions) FlattenJSONToMaps(filePath string, columns []string) ([]map[string]interface{}, error) {
+	// Log the start of JSON streaming
+	l.Logger.Info("Starting JSON streaming for file with top-level key", zap.String("filePath", filePath))
+
+	// Open the JSON file
+	file, err := os.Open(filePath)
+	if err != nil {
+		l.Logger.Error("Failed to open JSON file", zap.String("filePath", filePath), zap.Error(err))
+		return nil, fmt.Errorf("failed to open JSON file: %w", err)
+	}
+	//defer file.Close() // Ensure file closure
+
+	l.Logger.Debug("Loaded allowed columns for validation", zap.Strings("columns", columns))
+
+	// Initialize JSON decoder
+	decoder := json.NewDecoder(file)
+
+	// Decode the top-level JSON structure
+	var topLevel map[string]interface{}
+	if err := decoder.Decode(&topLevel); err != nil {
+		l.Logger.Error("Failed to decode top-level JSON structure", zap.String("filePath", filePath), zap.Error(err))
+		return nil, fmt.Errorf("failed to decode top-level JSON structure: %w", err)
+	}
+
+	// Extract the array under the "Records" key
+	records, ok := topLevel["Records"].([]interface{})
+	if !ok {
+		l.Logger.Error("Top-level key 'Records' is missing or not an array", zap.String("filePath", filePath))
+		return nil, fmt.Errorf("top-level key 'Records' is missing or not an array")
+	}
+
+	rows := []map[string]interface{}{}
+	// Process each record in the "Records" array
+	for _, record := range records {
+		recordMap, ok := record.(map[string]interface{})
+		if !ok {
+			l.Logger.Warn("Skipping non-object element in 'Records' array", zap.Any("element", record))
+			continue
+		}
+
+		nestedRows, baseRecord := l.ParseAndFlattenJSONElement(recordMap, columns)
+		// If no nested rows, send the base record as-is
+		if len(nestedRows) == 0 {
+			l.Logger.Debug("Loading base record", zap.Any("record", baseRecord))
+			rows = append(rows, baseRecord)
+		} else {
+			// Stream each row generated from nested elements
+			rows = append(rows, nestedRows...)
+		}
+	}
+
+	// Log successful completion
+	l.Logger.Info("Finished loading JSON file with top-level key", zap.String("filePath", filePath))
+	return rows, nil
+}
+
 func (l *LoaderFunctions) ParseAndFlattenJSONElement(recordMap map[string]interface{}, columns []string) (nestedRows []map[string]interface{}, baseRecord map[string]interface{}) {
 	// Create a set for quick validation of allowed columns
 	columnSet := make(map[string]struct{})
@@ -295,72 +362,6 @@ func (l *LoaderFunctions) ParseAndFlattenJSONElement(recordMap map[string]interf
 	return nestedRows, baseRecord
 }
 
-
-// FlattenJSONToMaps handles JSON files with a top-level key containing the records.
-// Supports flattening of nested arrays within each record and validates against allowed columns.
-//
-// Parameters:
-// - filePath: The path to the JSON file to be streamed.
-// - recordChan: A channel to send the streamed records.
-// - columns: A slice of allowed column names to validate the keys.
-//
-// Returns:
-// - An error if streaming or JSON processing fails.
-func (l *LoaderFunctions) FlattenJSONToMaps(filePath string, columns []string) ([]map[string]interface{}, error) {
-	// Log the start of JSON streaming
-	l.Logger.Info("Starting JSON streaming for file with top-level key", zap.String("filePath", filePath))
-
-	// Open the JSON file
-	file, err := os.Open(filePath)
-	if err != nil {
-		l.Logger.Error("Failed to open JSON file", zap.String("filePath", filePath), zap.Error(err))
-		return nil, fmt.Errorf("failed to open JSON file: %w", err)
-	}
-	//defer file.Close() // Ensure file closure
-
-	l.Logger.Debug("Loaded allowed columns for validation", zap.Strings("columns", columns))
-
-	// Initialize JSON decoder
-	decoder := json.NewDecoder(file)
-
-	// Decode the top-level JSON structure
-	var topLevel map[string]interface{}
-	if err := decoder.Decode(&topLevel); err != nil {
-		l.Logger.Error("Failed to decode top-level JSON structure", zap.String("filePath", filePath), zap.Error(err))
-		return nil, fmt.Errorf("failed to decode top-level JSON structure: %w", err)
-	}
-
-	// Extract the array under the "Records" key
-	records, ok := topLevel["Records"].([]interface{})
-	if !ok {
-		l.Logger.Error("Top-level key 'Records' is missing or not an array", zap.String("filePath", filePath))
-		return nil, fmt.Errorf("top-level key 'Records' is missing or not an array")
-	}
-
-	rows := []map[string]interface{}{}
-	// Process each record in the "Records" array
-	for _, record := range records {
-		recordMap, ok := record.(map[string]interface{})
-		if !ok {
-			l.Logger.Warn("Skipping non-object element in 'Records' array", zap.Any("element", record))
-			continue
-		}
-
-		nestedRows, baseRecord := l.ParseAndFlattenJSONElement(recordMap, columns)
-		// If no nested rows, send the base record as-is
-		if len(nestedRows) == 0 {
-			l.Logger.Debug("Loading base record", zap.Any("record", baseRecord))
-			rows = append(rows, baseRecord)
-		} else {
-			// Stream each row generated from nested elements
-			rows = append(rows, nestedRows...)
-		}
-	}
-
-	// Log successful completion
-	l.Logger.Info("Finished loading JSON file with top-level key", zap.String("filePath", filePath))
-	return rows, nil
-}
 
 // ParseAndFlattenXMLElementWithColumns parses and flattens an XML element, dynamically handling nested structures.
 // It validates the extracted fields against a provided list of column names.
@@ -523,39 +524,54 @@ func (l *LoaderFunctions) ExportToJSON(records []map[string]interface{}, outputP
 	return nil
 }
 
-//func (l *LoaderFunctions) ExportToCSV(records []map[string]interface{}, outputPath string) error {
-//	file, err := os.Create(outputPath)
-//	if err != nil {
-//		return fmt.Errorf("failed to create CSV file: %w", err)
-//	}
-//
-//	writer := csv.NewWriter(file)
-//	defer writer.Flush()
-//
-//	// Write headers
-//	if len(records) > 0 {
-//		headers := []string{}
-//		for key := range records[0] {
-//			headers = append(headers, key)
-//		}
-//		if err := writer.Write(headers); err != nil {
-//			return fmt.Errorf("failed to write CSV headers: %w", err)
-//		}
-//
-//		// Write rows
-//		for _, record := range records {
-//			row := []string{}
-//			for _, header := range headers {
-//				row = append(row, record[header])
-//			}
-//			if err := writer.Write(row); err != nil {
-//				return fmt.Errorf("failed to write CSV row: %w", err)
-//			}
-//		}
-//	}
-//	fmt.Printf("Successfully exported to CSV: %s\n", outputPath)
-//	return nil
-//}
+func (l *LoaderFunctions) ExportToCSV(records []map[string]interface{}, outputPath string) error {
+	// Create the output CSV file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV file: %w", err)
+	}
+
+	// Initialize the CSV writer
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Check if records are available
+	if len(records) == 0 {
+		return fmt.Errorf("no records available to export")
+	}
+
+	// Extract and write headers
+	headers := []string{}
+	for key := range records[0] {
+		headers = append(headers, key)
+	}
+	if err := writer.Write(headers); err != nil {
+		return fmt.Errorf("failed to write CSV headers: %w", err)
+	}
+
+	// Write rows
+	for _, record := range records {
+		row := []string{}
+		for _, header := range headers {
+			value, exists := record[header]
+			if !exists {
+				row = append(row, "")
+				continue
+			}
+
+			// Convert value to string
+			row = append(row, fmt.Sprintf("%v", value))
+		}
+
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+	}
+
+	fmt.Printf("Successfully exported to CSV: %s\n", outputPath)
+	return nil
+}
+
 
 func (l *LoaderFunctions) ExportToExcel(records []map[string]interface{}, outputPath string) error {
 	f := excelize.NewFile()

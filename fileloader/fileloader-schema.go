@@ -241,10 +241,10 @@ func (l *LoaderFunctions) ParseAndFlattenJSONElement(recordMap map[string]interf
 	// Separate base fields and process nested arrays
 	for key, value := range recordMap {
 		// Validate the key against the allowed columns
-		if _, allowed := columnSet[key]; !allowed {
-			l.Logger.Warn("Skipping unmapped key", zap.String("key", key))
-			continue
-		}
+		//if _, allowed := columnSet[key]; !allowed {
+		//	l.Logger.Warn("Skipping unmapped key", zap.String("key", key))
+		//	continue
+		//}
 
 		switch v := value.(type) {
 		case []interface{}: // Handle arrays dynamically

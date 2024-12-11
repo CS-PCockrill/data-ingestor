@@ -252,6 +252,7 @@ func (l *LoaderFunctions) ParseAndFlattenXMLElementWithColumns(decoder *xml.Deco
 	// If no nested repeated elements, add the base record as a single row
 	nestedRecords = append(nestedRecords, resultRows...)
 
+	l.Logger.Info("Nested Records", zap.Any("Records", nestedRecords), zap.Any("Column Set", columnSet))
 	// Ensure keys are flat and validate against columns
 	for i, record := range nestedRecords {
 		flat := make(map[string]interface{})

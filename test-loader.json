@@ -2,152 +2,152 @@
   "Records": [
     {
       "user": "JohnDoe",
-      "dateCreated": 1698412800,
-      "dateSubmitted": 1698499200,
-      "assetName": "AssetA",
+      "dt_created": 1698412800,
+      "dt_submitted": 1698499200,
+      "ast_name": "AssetA",
       "location": "HQ",
       "status": "Pending",
-      "jsonHash": "hash123",
-      "localId": "local123",
-      "fileName": "fileA.txt",
+      "json_hash": "hash123",
+      "local_id": "local123",
+      "filename": "fileA.txt",
       "fnumbers": [
-        { "fNumber": "FN001", "scanTime": "2024-12-05T08:00:00Z" },
-        { "fNumber": "FN002", "scanTime": "2024-12-05T08:30:00Z" }
+        { "fnumber": "FN001", "scan_time": "2024-12-05T08:00:00Z" },
+        { "fnumber": "FN002", "scan_time": "2024-12-05T08:30:00Z" }
       ]
     },
     {
       "user": "JaneSmith",
-      "dateCreated": 1698412900,
-      "dateSubmitted": 1698499300,
-      "assetName": "AssetB",
+      "dt_created": 1698412900,
+      "dt_submitted": 1698499300,
+      "ast_name": "AssetB",
       "location": "Branch1",
       "status": "Approved",
-      "jsonHash": "hash456",
-      "localId": "local456",
-      "fileName": "fileB.txt",
+      "json_hash": "hash456",
+      "local_id": "local456",
+      "filename": "fileB.txt",
       "fnumbers": [
-        { "fNumber": "FN003", "scanTime": "2024-12-05T09:00:00Z" },
-        { "fNumber": "FN004", "scanTime": "2024-12-05T09:30:00Z" }
+        { "fnumber": "FN003", "scan_time": "2024-12-05T09:00:00Z" },
+        { "fnumber": "FN004", "scan_time": "2024-12-05T09:30:00Z" }
       ]
     },
     {
       "user": "AliceJohnson",
-      "dateCreated": 1698413000,
-      "dateSubmitted": 1698499400,
-      "assetName": null,
+      "dt_created": 1698413000,
+      "dt_submitted": 1698499400,
+      "ast_name": null,
       "location": "HQ",
       "status": "Rejected",
-      "jsonHash": "hash789",
-      "localId": null,
-      "fileName": "fileC.txt",
+      "json_hash": "hash789",
+      "local_id": null,
+      "filename": "fileC.txt",
       "fnumbers": [
-        { "fNumber": "FN005", "scanTime": "2024-12-05T10:00:00Z" },
-        { "fNumber": "FN006", "scanTime": "2024-12-05T10:30:00Z" }
+        { "fnumber": "FN005", "scan_time": "2024-12-05T10:00:00Z" },
+        { "fnumber": "FN006", "scan_time": "2024-12-05T10:30:00Z" }
       ]
     },
     {
       "user": "RobertBrown",
-      "dateCreated": 1698413100,
-      "dateSubmitted": 1698499500,
-      "assetName": "AssetD",
+      "dt_created": 1698413100,
+      "dt_submitted": 1698499500,
+      "ast_name": "AssetD",
       "location": "Branch2",
       "status": "Pending",
-      "jsonHash": "hash101",
-      "localId": "local789",
-      "fileName": "fileD.txt",
+      "json_hash": "hash101",
+      "local_id": "local789",
+      "filename": "fileD.txt",
       "fnumbers": [
-        { "fNumber": "FN007", "scanTime": "2024-12-05T11:00:00Z" },
-        { "fNumber": "FN008", "scanTime": "2024-12-05T11:30:00Z" }
+        { "fnumber": "FN007", "scan_time": "2024-12-05T11:00:00Z" },
+        { "fnumber": "FN008", "scan_time": "2024-12-05T11:30:00Z" }
       ]
     },
     {
       "user": "EmilyDavis",
-      "dateCreated": 1698413200,
-      "dateSubmitted": 1698499600,
-      "assetName": "AssetE",
+      "dt_created": 1698413200,
+      "dt_submitted": 1698499600,
+      "ast_name": "AssetE",
       "location": "HQ",
       "status": "Pending",
-      "jsonHash": "hash202",
-      "localId": null,
-      "fileName": "fileE.txt",
+      "json_hash": "hash202",
+      "local_id": null,
+      "filename": "fileE.txt",
       "fnumbers": [
-        { "fNumber": "FN009", "scanTime": "2024-12-05T12:00:00Z" },
-        { "fNumber": "FN010", "scanTime": "2024-12-05T12:30:00Z" }
+        { "fnumber": "FN009", "scan_time": "2024-12-05T12:00:00Z" },
+        { "fnumber": "FN010", "scan_time": "2024-12-05T12:30:00Z" }
       ]
     },
     {
       "user": "ChrisTaylor",
-      "dateCreated": 1698413300,
-      "dateSubmitted": 1698499700,
-      "assetName": "AssetF",
+      "dt_created": 1698413300,
+      "dt_submitted": 1698499700,
+      "ast_name": "AssetF",
       "location": "Branch3",
       "status": "Approved",
-      "jsonHash": "hash303",
-      "localId": "local321",
-      "fileName": "fileF.txt",
+      "json_hash": "hash303",
+      "local_id": "local321",
+      "filename": "fileF.txt",
       "fnumbers": [
-        { "fNumber": "FN011", "scanTime": "2024-12-05T13:00:00Z" },
-        { "fNumber": "FN012", "scanTime": "2024-12-05T13:30:00Z" }
+        { "fnumber": "FN011", "scan_time": "2024-12-05T13:00:00Z" },
+        { "fnumber": "FN012", "scan_time": "2024-12-05T13:30:00Z" }
       ]
     },
     {
       "user": "SaraWhite",
-      "dateCreated": 1698413400,
-      "dateSubmitted": 1698499800,
-      "assetName": "AssetG",
+      "dt_created": 1698413400,
+      "dt_submitted": 1698499800,
+      "ast_name": "AssetG",
       "location": "HQ",
       "status": "Rejected",
-      "jsonHash": "hash404",
-      "localId": null,
-      "fileName": "fileG.txt",
+      "json_hash": "hash404",
+      "local_id": null,
+      "filename": "fileG.txt",
       "fnumbers": [
-        { "fNumber": "FN013", "scanTime": "2024-12-05T14:00:00Z" },
-        { "fNumber": "FN014", "scanTime": "2024-12-05T14:30:00Z" }
+        { "fnumber": "FN013", "scan_time": "2024-12-05T14:00:00Z" },
+        { "fnumber": "FN014", "scan_time": "2024-12-05T14:30:00Z" }
       ]
     },
     {
       "user": "MichaelBrown",
-      "dateCreated": 1698413500,
-      "dateSubmitted": 1698499900,
-      "assetName": null,
+      "dt_created": 1698413500,
+      "dt_submitted": 1698499900,
+      "ast_name": null,
       "location": "Branch4",
       "status": "Pending",
-      "jsonHash": "hash505",
-      "localId": null,
-      "fileName": "fileH.txt",
+      "json_hash": "hash505",
+      "local_id": null,
+      "filename": "fileH.txt",
       "fnumbers": [
-        { "fNumber": "FN015", "scanTime": "2024-12-05T15:00:00Z" },
-        { "fNumber": "FN016", "scanTime": "2024-12-05T15:30:00Z" }
+        { "fnumber": "FN015", "scan_time": "2024-12-05T15:00:00Z" },
+        { "fnumber": "FN016", "scan_time": "2024-12-05T15:30:00Z" }
       ]
     },
     {
       "user": "LindaJones",
-      "dateCreated": 1698413600,
-      "dateSubmitted": 1698500000,
-      "assetName": "AssetH",
+      "dt_created": 1698413600,
+      "dt_submitted": 1698500000,
+      "ast_name": "AssetH",
       "location": "HQ",
       "status": "Approved",
-      "jsonHash": "hash606",
-      "localId": "local654",
-      "fileName": "fileI.txt",
+      "json_hash": "hash606",
+      "local_id": "local654",
+      "filename": "fileI.txt",
       "fnumbers": [
-        { "fNumber": "FN017", "scanTime": "2024-12-05T16:00:00Z" },
-        { "fNumber": "FN018", "scanTime": "2024-12-05T16:30:00Z" }
+        { "fnumber": "FN017", "scan_time": "2024-12-05T16:00:00Z" },
+        { "fnumber": "FN018", "scan_time": "2024-12-05T16:30:00Z" }
       ]
     },
     {
       "user": "KevinWilson",
-      "dateCreated": 1698413700,
-      "dateSubmitted": 1698500100,
-      "assetName": "AssetI",
+      "dt_created": 1698413700,
+      "dt_submitted": 1698500100,
+      "ast_name": "AssetI",
       "location": "Branch5",
       "status": "Pending",
-      "jsonHash": "hash707",
-      "localId": "local987",
-      "fileName": "fileJ.txt",
+      "json_hash": "hash707",
+      "local_id": "local987",
+      "filename": "fileJ.txt",
       "fnumbers": [
-        { "fNumber": "FN019", "scanTime": "2024-12-05T17:00:00Z" },
-        { "fNumber": "FN020", "scanTime": "2024-12-05T17:30:00Z" }
+        { "fnumber": "FN019", "scan_time": "2024-12-05T17:00:00Z" },
+        { "fnumber": "FN020", "scan_time": "2024-12-05T17:30:00Z" }
       ]
     }
   ]

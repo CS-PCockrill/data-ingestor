@@ -447,7 +447,7 @@ func (mp *TransposerFunctions) ExtractSQLDataFromExcel(filePath, sheetName, rang
 	placeholderCount := 0
 
 	// Process the specified range for column names
-	for _, cell := range rows[0] { // Assuming first row of the range
+	for _, cell := range rows[line] { // Assuming first row of the range
 		if cell != "" {
 			columns = append(columns, cell)
 		}

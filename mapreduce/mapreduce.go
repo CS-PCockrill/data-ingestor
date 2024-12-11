@@ -3,7 +3,6 @@ package mapreduce
 import (
 	"data-ingestor/util"
 	"database/sql"
-	"fmt"
 	"sync"
 )
 
@@ -49,49 +48,6 @@ func worker(taskChan <-chan map[string]interface{}, resultChan chan<- MapResult,
 		}
 		counter.IncrementSucceeded(1)
 	}
-}
-
-// MapReduce orchestrates the Map and Reduce phases.
-func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db *sql.DB, tableName string, workerCount int) error {
-	// Channels for tasks and results
-	taskChan := make(chan map[string]interface{}, workerCount)
-	resultChan := make(chan MapResult, workerCount)
-	var wg sync.WaitGroup
-
-	// Start workers
-	//for i := 0; i < workerCount; i++ {
-	//	wg.Add(1)
-		//go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg, )
-	//}
-
-	// Split records into batches and feed them to taskChan
-	go func() {
-		fmt.Printf("Length of Records: %d | Worker Count: %d\n", len(records), workerCount)
-		batchSize := (len(records) + workerCount - 1) / workerCount
-		for i := 0; i < len(records); i += batchSize {
-			end := i + batchSize
-			if end > len(records) {
-				end = len(records)
-			}
-			//taskChan <- records[i:end]
-		}
-		close(taskChan)
-	}()
-
-	// Wait for workers to finish
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// Collect results
-	var results []MapResult
-	for result := range resultChan {
-		results = append(results, result)
-	}
-
-	// Perform Reduce phase
-	return reduceFunc(results)
 }
 
 // MapReduceStreaming orchestrates the Map and Reduce phases with streaming.
@@ -147,3 +103,46 @@ func MapReduceStreaming(
 	// Perform Reduce phase
 	return reduceFunc(results)
 }
+
+// MapReduce orchestrates the Map and Reduce phases.
+//func MapReduce(records []interface{}, mapFunc MapFunc, reduceFunc ReduceFunc, db *sql.DB, tableName string, workerCount int) error {
+//	// Channels for tasks and results
+//	taskChan := make(chan map[string]interface{}, workerCount)
+//	resultChan := make(chan MapResult, workerCount)
+//	var wg sync.WaitGroup
+//
+//	// Start workers
+//	//for i := 0; i < workerCount; i++ {
+//	//	wg.Add(1)
+//		//go worker(taskChan, resultChan, mapFunc, db, tableName, i, &wg, )
+//	//}
+//
+//	// Split records into batches and feed them to taskChan
+//	go func() {
+//		fmt.Printf("Length of Records: %d | Worker Count: %d\n", len(records), workerCount)
+//		batchSize := (len(records) + workerCount - 1) / workerCount
+//		for i := 0; i < len(records); i += batchSize {
+//			end := i + batchSize
+//			if end > len(records) {
+//				end = len(records)
+//			}
+//			//taskChan <- records[i:end]
+//		}
+//		close(taskChan)
+//	}()
+//
+//	// Wait for workers to finish
+//	go func() {
+//		wg.Wait()
+//		close(resultChan)
+//	}()
+//
+//	// Collect results
+//	var results []MapResult
+//	for result := range resultChan {
+//		results = append(results, result)
+//	}
+//
+//	// Perform Reduce phase
+//	return reduceFunc(results)
+//}
